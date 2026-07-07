@@ -9,6 +9,13 @@ services:
       # SSH к adm: внешний порт задается ADM_SSH_HOST_PORT в .env.
       - "127.0.0.1:${ADM_SSH_HOST_PORT}:22/tcp"
 
+  gos_arm_user:
+    ports:
+      # RDP к user: внешний порт задается USER_RDP_HOST_PORT в .env.
+      - "127.0.0.1:${USER_RDP_HOST_PORT}:3389/tcp"
+      # SSH к user: внешний порт задается USER_SSH_HOST_PORT в .env.
+      - "127.0.0.1:${USER_SSH_HOST_PORT}:22/tcp"
+
   gos_web:
     ports:
       # HTTP к EspoCRM: внешний порт задается ESPOCRM_HTTP_HOST_PORT в .env.

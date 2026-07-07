@@ -1,4 +1,6 @@
-# Основной compose-файл описывает внутреннюю лабораторную инфраструктуру.
+# Основной compose-файл описывает лабораторную инфраструктуру с двумя сетями:
+# internal_net - внутренняя сеть рабочих станций и серверов;
+# external_net - внешняя сеть, куда выведен web-сервис.
 # Публикация портов наружу вынесена в docker-compose.local.yml и docker-compose.vm.yml,
 # чтобы один и тот же стенд можно было безопасно запускать на MacBook и на Ubuntu VM.
 name: ${COMPOSE_PROJECT_NAME:-gosservice_lab}
@@ -33,14 +35,37 @@ services:
       gos_web:
         condition: service_started
     networks:
-      # admin_net имитирует административный сегмент.
-      admin_net:
-        ipv4_address: ${GOS_ARM_ADM_ADMIN_IP}
-      # servers_net временно подключен к adm в v1, пока нет отдельного firewall/router.
-      servers_net:
-        ipv4_address: ${GOS_ARM_ADM_SERVERS_IP}
+      # adm находится только во внутренней сети.
+      internal_net:
+        ipv4_address: ${GOS_ARM_ADM_IP}
     dns:
       # Принудительно используем наш лабораторный DNS.
+      - ${GOS_DNS_IP}
+
+  # Пользовательская рабочая станция.
+  # По устройству такая же, как adm: GUI по RDP и SSH-доступ по паролю.
+  gos_arm_user:
+    <<: *common_env_file
+    build:
+      context: ./services/gos_arm_adm
+    container_name: gos_arm_user
+    hostname: gos_arm_user
+    restart: unless-stopped
+    shm_size: "1gb"
+    environment:
+      LOCALADMIN_USER: ${USER_USERNAME}
+      LOCALADMIN_PASSWORD: ${USER_PASSWORD}
+      GOS_DOMAIN: ${GOS_DOMAIN}
+    depends_on:
+      gos_dns:
+        condition: service_healthy
+      gos_web:
+        condition: service_started
+    networks:
+      # user-машина находится только во внутренней сети.
+      internal_net:
+        ipv4_address: ${GOS_ARM_USER_IP}
+    dns:
       - ${GOS_DNS_IP}
 
   # DNS-сервер лабораторной зоны gos.local.
@@ -55,11 +80,12 @@ services:
       # Эти IP используются start.sh для генерации зоны gos.local.
       GOS_DOMAIN: ${GOS_DOMAIN}
       GOS_DNS_IP: ${GOS_DNS_IP}
-      GOS_ARM_ADM_SERVERS_IP: ${GOS_ARM_ADM_SERVERS_IP}
-      GOS_WEB_IP: ${GOS_WEB_IP}
+      GOS_ARM_ADM_IP: ${GOS_ARM_ADM_IP}
+      GOS_ARM_USER_IP: ${GOS_ARM_USER_IP}
+      GOS_WEB_INTERNAL_IP: ${GOS_WEB_INTERNAL_IP}
       GOS_DB_IP: ${GOS_DB_IP}
     networks:
-      servers_net:
+      internal_net:
         ipv4_address: ${GOS_DNS_IP}
         aliases:
           # DNS-safe имена для обращения внутри docker-сети.
@@ -67,7 +93,7 @@ services:
           - ns.${GOS_DOMAIN}
     healthcheck:
       # Проверяем, что зона загружена и crm.gos.local резолвится в IP web-сервера.
-      test: ["CMD-SHELL", "dig @127.0.0.1 crm.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_IP}'"]
+      test: ["CMD-SHELL", "dig @127.0.0.1 crm.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_INTERNAL_IP}'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -103,12 +129,16 @@ services:
       - espocrm_custom:/var/www/html/custom
       - espocrm_client_custom:/var/www/html/client/custom
     networks:
-      servers_net:
-        ipv4_address: ${GOS_WEB_IP}
+      # Внутренняя сеть нужна web-сервису для доступа к DNS и БД.
+      internal_net:
+        ipv4_address: ${GOS_WEB_INTERNAL_IP}
         aliases:
           # Основное имя CRM и короткий alias для диагностики.
           - crm.${GOS_DOMAIN}
           - web.${GOS_DOMAIN}
+      # Внешняя сеть закрепляет отдельный внешний IP web-машины.
+      external_net:
+        ipv4_address: ${GOS_WEB_EXTERNAL_IP}
     dns:
       - ${GOS_DNS_IP}
 
@@ -128,7 +158,7 @@ services:
       # Данные БД должны переживать restart контейнера.
       - espocrm_db:/var/lib/mysql
     networks:
-      servers_net:
+      internal_net:
         ipv4_address: ${GOS_DB_IP}
         aliases:
           - db.${GOS_DOMAIN}
@@ -143,21 +173,21 @@ services:
       start_period: 20s
 
 networks:
-  # Административный сегмент для ARM adm.
-  admin_net:
-    name: gos_admin_net
+  # Внутренняя сеть: DNS, adm, user, DB и внутренний интерфейс web.
+  internal_net:
+    name: gos_internal_net
     driver: bridge
     ipam:
       config:
-        - subnet: ${GOS_ADMIN_SUBNET}
+        - subnet: ${GOS_INTERNAL_SUBNET}
 
-  # Серверный сегмент для DNS, CRM и БД.
-  servers_net:
-    name: gos_servers_net
+  # Внешняя сеть: внешний интерфейс web-сервиса.
+  external_net:
+    name: gos_external_net
     driver: bridge
     ipam:
       config:
-        - subnet: ${GOS_SERVERS_SUBNET}
+        - subnet: ${GOS_EXTERNAL_SUBNET}
 
 volumes:
   # Persistent volumes EspoCRM.

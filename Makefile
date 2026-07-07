@@ -7,7 +7,7 @@ COMPOSE_LOCAL = docker compose --env-file $(ENV_FILE) -f docker-compose.yml -f d
 # VM-профиль: порты пробрасываются на 0.0.0.0.
 COMPOSE_VM = docker compose --env-file $(ENV_FILE) -f docker-compose.yml -f docker-compose.vm.yml
 
-.PHONY: help env check-ports config build up up-vm down ps logs restart shell-adm ssh-adm rdp-info clean-volumes
+.PHONY: help env check-ports config build up up-vm down ps logs restart shell-adm shell-user ssh-adm ssh-user rdp-info clean-volumes
 
 # Справка по основным командам управления стендом.
 help:
@@ -27,6 +27,7 @@ help:
 	@echo ""
 	@echo "Access:"
 	@echo "  make ssh-adm      SSH into gos_arm_adm through the configured host port"
+	@echo "  make ssh-user     SSH into gos_arm_user through the configured host port"
 	@echo "  make rdp-info     Print RDP connection details"
 
 # Создает локальный .env из .env.example, если его еще нет.
@@ -43,7 +44,7 @@ env:
 # Это важно для локальной разработки: RDP/SSH/HTTP порты могут быть уже заняты.
 check-ports: env
 	@set -a; . ./$(ENV_FILE); set +a; \
-	for item in "ADM_RDP_HOST_PORT:RDP" "ADM_SSH_HOST_PORT:SSH" "ESPOCRM_HTTP_HOST_PORT:EspoCRM HTTP"; do \
+	for item in "ADM_RDP_HOST_PORT:adm RDP" "ADM_SSH_HOST_PORT:adm SSH" "USER_RDP_HOST_PORT:user RDP" "USER_SSH_HOST_PORT:user SSH" "ESPOCRM_HTTP_HOST_PORT:EspoCRM HTTP"; do \
 		var=$${item%%:*}; label=$${item#*:}; eval port=\$$$${var}; \
 		case "$$port" in ""|*[!0-9]*) echo "$$label port '$$port' is invalid. Check $$var in $(ENV_FILE)."; exit 1 ;; esac; \
 		if lsof -nP -iTCP:$$port -sTCP:LISTEN >/dev/null 2>&1; then \
@@ -91,16 +92,27 @@ restart: down up
 shell-adm: env
 	@$(COMPOSE_LOCAL) exec gos_arm_adm bash
 
+# Открывает shell внутри пользовательской машины.
+shell-user: env
+	@$(COMPOSE_LOCAL) exec gos_arm_user bash
+
 # Подключается к adm по SSH через host-порт из .env.
 ssh-adm: env
 	@set -a; . ./$(ENV_FILE); set +a; \
 	ssh -p "$$ADM_SSH_HOST_PORT" "$$LOCALADMIN_USER@127.0.0.1"
 
+# Подключается к user-машине по SSH через host-порт из .env.
+ssh-user: env
+	@set -a; . ./$(ENV_FILE); set +a; \
+	ssh -p "$$USER_SSH_HOST_PORT" "$$USER_USERNAME@127.0.0.1"
+
 # Печатает актуальные параметры подключения из .env.
 rdp-info: env
 	@set -a; . ./$(ENV_FILE); set +a; \
-	echo "RDP: 127.0.0.1:$$ADM_RDP_HOST_PORT"; \
-	echo "SSH: ssh -p $$ADM_SSH_HOST_PORT $$LOCALADMIN_USER@127.0.0.1"; \
+	echo "adm RDP: 127.0.0.1:$$ADM_RDP_HOST_PORT"; \
+	echo "adm SSH: ssh -p $$ADM_SSH_HOST_PORT $$LOCALADMIN_USER@127.0.0.1"; \
+	echo "user RDP: 127.0.0.1:$$USER_RDP_HOST_PORT"; \
+	echo "user SSH: ssh -p $$USER_SSH_HOST_PORT $$USER_USERNAME@127.0.0.1"; \
 	echo "EspoCRM from host: http://127.0.0.1:$$ESPOCRM_HTTP_HOST_PORT with Host header crm.$$GOS_DOMAIN"
 
 # Полностью удаляет контейнеры и volumes.

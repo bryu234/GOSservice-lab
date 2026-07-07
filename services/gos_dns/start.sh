@@ -56,11 +56,13 @@ cat >/etc/bind/db.$domain <<EOF
 ns             IN A  ${GOS_DNS_IP}
 dns            IN A  ${GOS_DNS_IP}
 gos-dns        IN A  ${GOS_DNS_IP}
-adm            IN A  ${GOS_ARM_ADM_SERVERS_IP}
-gos-arm-adm    IN A  ${GOS_ARM_ADM_SERVERS_IP}
-crm            IN A  ${GOS_WEB_IP}
-web            IN A  ${GOS_WEB_IP}
-gos-web        IN A  ${GOS_WEB_IP}
+adm            IN A  ${GOS_ARM_ADM_IP}
+gos-arm-adm    IN A  ${GOS_ARM_ADM_IP}
+user           IN A  ${GOS_ARM_USER_IP}
+gos-arm-user   IN A  ${GOS_ARM_USER_IP}
+crm            IN A  ${GOS_WEB_INTERNAL_IP}
+web            IN A  ${GOS_WEB_INTERNAL_IP}
+gos-web        IN A  ${GOS_WEB_INTERNAL_IP}
 db             IN A  ${GOS_DB_IP}
 gos-db         IN A  ${GOS_DB_IP}
 EOF
