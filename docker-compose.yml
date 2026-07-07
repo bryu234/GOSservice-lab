@@ -1,0 +1,168 @@
+# Основной compose-файл описывает внутреннюю лабораторную инфраструктуру.
+# Публикация портов наружу вынесена в docker-compose.local.yml и docker-compose.vm.yml,
+# чтобы один и тот же стенд можно было безопасно запускать на MacBook и на Ubuntu VM.
+name: ${COMPOSE_PROJECT_NAME:-gosservice_lab}
+
+# Общий env_file подключает .env ко всем контейнерам, которым нужны параметры стенда.
+x-env-file: &common_env_file
+  env_file:
+    - ./.env
+
+services:
+  # Административная рабочая станция.
+  # Через нее проверяем DNS/Web и подключаемся по RDP/SSH с хоста.
+  gos_arm_adm:
+    <<: *common_env_file
+    build:
+      context: ./services/gos_arm_adm
+    container_name: gos_arm_adm
+    hostname: gos_arm_adm
+    restart: unless-stopped
+    # Нужен для стабильной GUI/RDP-сессии в desktop-контейнере.
+    shm_size: "1gb"
+    environment:
+      # Учетная запись создается в services/gos_arm_adm/start.sh.
+      LOCALADMIN_USER: ${LOCALADMIN_USER}
+      LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
+      GOS_DOMAIN: ${GOS_DOMAIN}
+    depends_on:
+      # Ждем здоровый DNS, чтобы adm сразу мог резолвить внутренние имена.
+      gos_dns:
+        condition: service_healthy
+      # Web достаточно стартовать; доступность HTTP проверяется отдельно.
+      gos_web:
+        condition: service_started
+    networks:
+      # admin_net имитирует административный сегмент.
+      admin_net:
+        ipv4_address: ${GOS_ARM_ADM_ADMIN_IP}
+      # servers_net временно подключен к adm в v1, пока нет отдельного firewall/router.
+      servers_net:
+        ipv4_address: ${GOS_ARM_ADM_SERVERS_IP}
+    dns:
+      # Принудительно используем наш лабораторный DNS.
+      - ${GOS_DNS_IP}
+
+  # DNS-сервер лабораторной зоны gos.local.
+  gos_dns:
+    <<: *common_env_file
+    build:
+      context: ./services/gos_dns
+    container_name: gos_dns
+    hostname: gos_dns
+    restart: unless-stopped
+    environment:
+      # Эти IP используются start.sh для генерации зоны gos.local.
+      GOS_DOMAIN: ${GOS_DOMAIN}
+      GOS_DNS_IP: ${GOS_DNS_IP}
+      GOS_ARM_ADM_SERVERS_IP: ${GOS_ARM_ADM_SERVERS_IP}
+      GOS_WEB_IP: ${GOS_WEB_IP}
+      GOS_DB_IP: ${GOS_DB_IP}
+    networks:
+      servers_net:
+        ipv4_address: ${GOS_DNS_IP}
+        aliases:
+          # DNS-safe имена для обращения внутри docker-сети.
+          - dns.${GOS_DOMAIN}
+          - ns.${GOS_DOMAIN}
+    healthcheck:
+      # Проверяем, что зона загружена и crm.gos.local резолвится в IP web-сервера.
+      test: ["CMD-SHELL", "dig @127.0.0.1 crm.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_IP}'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # Web-машина из infra.pdf. В v1 это официальный EspoCRM-контейнер.
+  gos_web:
+    image: espocrm/espocrm:latest
+    container_name: gos_web
+    hostname: gos_web
+    restart: unless-stopped
+    environment:
+      # Официальный entrypoint EspoCRM читает эти переменные и выполняет автоустановку.
+      ESPOCRM_DATABASE_PLATFORM: Mysql
+      ESPOCRM_DATABASE_HOST: gos_db
+      ESPOCRM_DATABASE_USER: ${ESPOCRM_DB_USER}
+      ESPOCRM_DATABASE_PASSWORD: ${ESPOCRM_DB_PASSWORD}
+      ESPOCRM_DATABASE_NAME: ${ESPOCRM_DB_NAME}
+      ESPOCRM_ADMIN_USERNAME: ${ESPOCRM_ADMIN_USERNAME}
+      ESPOCRM_ADMIN_PASSWORD: ${ESPOCRM_ADMIN_PASSWORD}
+      ESPOCRM_SITE_URL: http://crm.${GOS_DOMAIN}
+      ESPOCRM_CONFIG_USE_WEB_SOCKET: "false"
+    depends_on:
+      # Web стартует только после готовой БД и загруженной DNS-зоны.
+      gos_db:
+        condition: service_healthy
+      gos_dns:
+        condition: service_healthy
+    volumes:
+      # Поддержанная EspoCRM 10 volume-схема. Не монтируем /var/www/html целиком,
+      # иначе официальный entrypoint переходит в legacy mode и не делает автоустановку.
+      - espocrm_data:/var/www/html/data
+      - espocrm_custom:/var/www/html/custom
+      - espocrm_client_custom:/var/www/html/client/custom
+    networks:
+      servers_net:
+        ipv4_address: ${GOS_WEB_IP}
+        aliases:
+          # Основное имя CRM и короткий alias для диагностики.
+          - crm.${GOS_DOMAIN}
+          - web.${GOS_DOMAIN}
+    dns:
+      - ${GOS_DNS_IP}
+
+  # База данных EspoCRM.
+  gos_db:
+    image: mariadb:11.4
+    container_name: gos_db
+    hostname: gos_db
+    restart: unless-stopped
+    environment:
+      # Значения берутся из .env, чтобы стенд можно было переносить без правки YAML.
+      MYSQL_DATABASE: ${ESPOCRM_DB_NAME}
+      MYSQL_USER: ${ESPOCRM_DB_USER}
+      MYSQL_PASSWORD: ${ESPOCRM_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${ESPOCRM_DB_ROOT_PASSWORD}
+    volumes:
+      # Данные БД должны переживать restart контейнера.
+      - espocrm_db:/var/lib/mysql
+    networks:
+      servers_net:
+        ipv4_address: ${GOS_DB_IP}
+        aliases:
+          - db.${GOS_DOMAIN}
+    dns:
+      - ${GOS_DNS_IP}
+    healthcheck:
+      # Ждем инициализацию InnoDB перед запуском EspoCRM.
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+networks:
+  # Административный сегмент для ARM adm.
+  admin_net:
+    name: gos_admin_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${GOS_ADMIN_SUBNET}
+
+  # Серверный сегмент для DNS, CRM и БД.
+  servers_net:
+    name: gos_servers_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${GOS_SERVERS_SUBNET}
+
+volumes:
+  # Persistent volumes EspoCRM.
+  espocrm_data:
+  espocrm_custom:
+  espocrm_client_custom:
+  # Persistent volume MariaDB.
+  espocrm_db:

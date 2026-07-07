@@ -1,0 +1,15 @@
+# Локальный override для MacBook.
+# Все опубликованные порты слушают только 127.0.0.1, чтобы стенд не был доступен
+# из внешней сети ноутбука.
+services:
+  gos_arm_adm:
+    ports:
+      # RDP к adm: внешний порт задается ADM_RDP_HOST_PORT в .env.
+      - "127.0.0.1:${ADM_RDP_HOST_PORT}:3389/tcp"
+      # SSH к adm: внешний порт задается ADM_SSH_HOST_PORT в .env.
+      - "127.0.0.1:${ADM_SSH_HOST_PORT}:22/tcp"
+
+  gos_web:
+    ports:
+      # HTTP к EspoCRM: внешний порт задается ESPOCRM_HTTP_HOST_PORT в .env.
+      - "127.0.0.1:${ESPOCRM_HTTP_HOST_PORT}:80/tcp"

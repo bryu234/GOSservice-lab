@@ -1,0 +1,30 @@
+.env
+.env.local
+.env.*.local
+.DS_Store
+
+# Локальная документация, не публикуется в публичный репозиторий.
+SERVICES.local.md
+
+# IDE/editor state.
+.idea/
+.vscode/
+
+# Runtime data and logs.
+logs/
+tmp/
+**/data/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-*
+
+# Keys, certificates and local SSH state.
+*.key
+*.pem
+*.crt
+*.p12
+id_rsa*
+known_hosts
+client.keys

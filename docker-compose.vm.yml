@@ -1,0 +1,15 @@
+# Override для Ubuntu VM.
+# Порты слушают 0.0.0.0, поэтому к ним можно подключаться извне,
+# если firewall/сетевые правила VM это разрешают.
+services:
+  gos_arm_adm:
+    ports:
+      # RDP к adm снаружи VM.
+      - "0.0.0.0:${ADM_RDP_HOST_PORT}:3389/tcp"
+      # SSH к adm снаружи VM.
+      - "0.0.0.0:${ADM_SSH_HOST_PORT}:22/tcp"
+
+  gos_web:
+    ports:
+      # HTTP к EspoCRM снаружи VM.
+      - "0.0.0.0:${ESPOCRM_HTTP_HOST_PORT}:80/tcp"
