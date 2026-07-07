@@ -7,7 +7,22 @@ COMPOSE_LOCAL = docker compose --env-file $(ENV_FILE) -f docker-compose.yml -f d
 # VM-профиль: порты пробрасываются на 0.0.0.0.
 COMPOSE_VM = docker compose --env-file $(ENV_FILE) -f docker-compose.yml -f docker-compose.vm.yml
 
-.PHONY: help env check-ports config build up up-vm down ps logs restart shell-adm shell-user ssh-adm ssh-user rdp-info clean-volumes
+# Фиксированные имена контейнеров стенда. Нужны для fallback-очистки,
+# если на сервере была развернута старая или неправильная версия compose.
+PROJECT_CONTAINERS = gos_arm_adm gos_arm_user gos_dns gos_web gos_db
+
+# Имена сетей текущей версии и старых вариантов стенда.
+# Удаление сетей выполняется после остановки контейнеров.
+PROJECT_NETWORKS = gos_internal_net gos_external_net gos_admin_net gos_servers_net
+
+# Имена локально собранных compose-образов проекта.
+# Pull-образы также удаляются через docker compose down --rmi all.
+PROJECT_IMAGES = gosservice_lab-gos_arm_adm gosservice_lab-gos_arm_user gosservice_lab-gos_dns
+
+# Имена named volumes при стандартном COMPOSE_PROJECT_NAME=gosservice_lab.
+PROJECT_VOLUMES = gosservice_lab_espocrm_data gosservice_lab_espocrm_custom gosservice_lab_espocrm_client_custom gosservice_lab_espocrm_db
+
+.PHONY: help env check-ports config build up up-vm down ps logs restart shell-adm shell-user ssh-adm ssh-user rdp-info clean-volumes clean-all
 
 # Справка по основным командам управления стендом.
 help:
@@ -29,6 +44,9 @@ help:
 	@echo "  make ssh-adm      SSH into gos_arm_adm through the configured host port"
 	@echo "  make ssh-user     SSH into gos_arm_user through the configured host port"
 	@echo "  make rdp-info     Print RDP connection details"
+	@echo ""
+	@echo "Dangerous cleanup:"
+	@echo "  CONFIRM=1 make clean-all  Delete lab containers, networks, volumes and images"
 
 # Создает локальный .env из .env.example, если его еще нет.
 # Существующий .env не перезаписывается, чтобы не потерять локальные пароли/порты.
@@ -119,3 +137,25 @@ rdp-info: env
 # Использовать только когда нужно сбросить EspoCRM/MariaDB до чистого состояния.
 clean-volumes: env
 	@$(COMPOSE_LOCAL) down -v
+
+# Полностью удаляет все Docker-ресурсы этого стенда.
+# Команда опасная: удаляет контейнеры, сети, volumes с данными и образы.
+# Защита CONFIRM=1 нужна, чтобы случайно не стереть лабораторную БД.
+clean-all: env
+	@if [ "$(CONFIRM)" != "1" ]; then \
+		echo "This command deletes Docker resources created for the lab."; \
+		echo "It removes containers, networks, volumes and images."; \
+		echo "Run it explicitly: CONFIRM=1 make clean-all"; \
+		exit 1; \
+	fi
+	@echo "Stopping compose stack and deleting compose volumes, networks, orphans and images..."
+	@$(COMPOSE_LOCAL) down --volumes --remove-orphans --rmi all || true
+	@echo "Deleting fixed-name lab containers left by old deployments..."
+	@docker rm -f $(PROJECT_CONTAINERS) >/dev/null 2>&1 || true
+	@echo "Deleting lab networks left by current or legacy compose files..."
+	@docker network rm $(PROJECT_NETWORKS) >/dev/null 2>&1 || true
+	@echo "Deleting standard lab volumes left by current compose project name..."
+	@docker volume rm $(PROJECT_VOLUMES) >/dev/null 2>&1 || true
+	@echo "Deleting locally built lab images left by compose..."
+	@docker image rm $(PROJECT_IMAGES) >/dev/null 2>&1 || true
+	@echo "Lab Docker cleanup completed."
