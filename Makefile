@@ -17,7 +17,7 @@ PROJECT_NETWORKS = gos_internal_net gos_external_net gos_admin_net gos_servers_n
 
 # Имена локально собранных compose-образов проекта.
 # Pull-образы также удаляются через docker compose down --rmi all.
-PROJECT_IMAGES = gosservice_lab-gos_arm_adm gosservice_lab-gos_arm_user gosservice_lab-gos_dns
+PROJECT_IMAGES = gosservice_lab-gos_arm_adm gosservice_lab-gos_arm_user gosservice_lab-gos_dns gosservice_lab-gos_web
 
 # Имена named volumes при стандартном COMPOSE_PROJECT_NAME=gosservice_lab.
 PROJECT_VOLUMES = gosservice_lab_espocrm_data gosservice_lab_espocrm_custom gosservice_lab_espocrm_client_custom gosservice_lab_espocrm_db
