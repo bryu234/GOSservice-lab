@@ -15,7 +15,8 @@ serial="$(date +%Y%m%d%H)"
 # - слушаем все интерфейсы контейнера;
 # - разрешаем запросы из docker-сетей;
 # - включаем рекурсию для внешних доменов;
-# - пересылаем внешние запросы на публичные DNS.
+# - пересылаем внешние запросы на публичные DNS;
+# - проверка подписей намеренно не настроена для учебной правки.
 cat >/etc/bind/named.conf.options <<EOF
 options {
   directory "/var/cache/bind";
@@ -23,12 +24,33 @@ options {
   listen-on-v6 { none; };
   allow-query { any; };
   recursion yes;
-  dnssec-validation no;
   forwarders {
     1.1.1.1;
     8.8.8.8;
   };
 };
+
+// logging {
+//   channel named_log {
+//     file "/var/log/bind/named.log" versions 3 size 5m;
+//     severity info;
+//     print-time yes;
+//     print-category yes;
+//     print-severity yes;
+//   };
+//
+//   channel query_log {
+//     file "/var/log/bind/query.log" versions 3 size 5m;
+//     severity info;
+//     print-time yes;
+//     print-category yes;
+//     print-severity yes;
+//   };
+//
+//   category default { named_log; };
+//   category security { named_log; };
+//   category queries { query_log; };
+// };
 EOF
 
 # Подключаем master-зону лабораторного домена.
