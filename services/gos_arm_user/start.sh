@@ -8,6 +8,11 @@ set -euo pipefail
 # Значения по умолчанию нужны только для безопасного старта при ручном запуске.
 user_name="${USER_USERNAME:-user}"
 user_password="${USER_PASSWORD:-CHANGE_ME_USER_PASSWORD}"
+mail_domain="${MAIL_DOMAIN:-${GOS_DOMAIN:-gos.local}}"
+mail_user="${MAIL_USER:-$user_name}"
+mail_address="${mail_user}@${mail_domain}"
+imap_host="imap.${mail_domain}"
+smtp_host="smtp.${mail_domain}"
 
 # Создаем локального пользователя, если контейнер стартует впервые.
 if ! id "$user_name" >/dev/null 2>&1; then
@@ -31,6 +36,61 @@ sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || tru
 # Запускаем SSHD. В отличие от adm-машины, sudo и инструменты анализа трафика
 # здесь не настраиваются, потому что это обычная пользовательская станция.
 /usr/sbin/sshd
+
+# Создаем готовый профиль Thunderbird с настроенным почтовым аккаунтом.
+# Пароль не сохраняем в профиле: пользователь вводит MAIL_PASSWORD при первом входе.
+thunderbird_dir="/home/$user_name/.thunderbird"
+profile_name="gos.default"
+profile_dir="$thunderbird_dir/$profile_name"
+install_id="GOSLAB"
+
+install -d -m 700 -o "$user_name" -g "$user_name" "$profile_dir"
+
+cat >"$thunderbird_dir/profiles.ini" <<EOF
+[Install${install_id}]
+Default=${profile_name}
+Locked=1
+
+[Profile0]
+Name=gos
+IsRelative=1
+Path=${profile_name}
+Default=1
+
+[General]
+StartWithLastProfile=1
+Version=2
+EOF
+
+cat >"$profile_dir/prefs.js" <<EOF
+user_pref("mail.account.account1.identities", "id1");
+user_pref("mail.account.account1.server", "server1");
+user_pref("mail.accountmanager.accounts", "account1");
+user_pref("mail.accountmanager.defaultaccount", "account1");
+user_pref("mail.identity.id1.fullName", "${user_name}");
+user_pref("mail.identity.id1.smtpServer", "smtp1");
+user_pref("mail.identity.id1.useremail", "${mail_address}");
+user_pref("mail.identity.id1.valid", true);
+user_pref("mail.server.server1.authMethod", 3);
+user_pref("mail.server.server1.check_new_mail", true);
+user_pref("mail.server.server1.hostname", "${imap_host}");
+user_pref("mail.server.server1.login_at_startup", true);
+user_pref("mail.server.server1.name", "${mail_address}");
+user_pref("mail.server.server1.port", 143);
+user_pref("mail.server.server1.socketType", 0);
+user_pref("mail.server.server1.type", "imap");
+user_pref("mail.server.server1.userName", "${mail_user}");
+user_pref("mail.smtp.defaultserver", "smtp1");
+user_pref("mail.smtpserver.smtp1.authMethod", 3);
+user_pref("mail.smtpserver.smtp1.hostname", "${smtp_host}");
+user_pref("mail.smtpserver.smtp1.port", 587);
+user_pref("mail.smtpserver.smtp1.try_ssl", 0);
+user_pref("mail.smtpserver.smtp1.username", "${mail_user}");
+user_pref("mail.smtpservers", "smtp1");
+EOF
+
+chown -R "$user_name:$user_name" "$thunderbird_dir"
+chmod 700 "$thunderbird_dir" "$profile_dir"
 
 # В scottyhardy/docker-remote-desktop основной RDP/XRDP запуск спрятан
 # в /usr/bin/entrypoint. После нашей подготовки передаем управление ему.

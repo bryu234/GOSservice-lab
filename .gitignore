@@ -5,6 +5,7 @@
 
 # Локальная документация, не публикуется в публичный репозиторий.
 SERVICES.local.md
+RUN_AND_ACCESS.local.md
 
 # IDE/editor state.
 .idea/
@@ -28,3 +29,6 @@ tmp/
 id_rsa*
 known_hosts
 client.keys
+
+# Runtime-generated Wazuh certificates. Generate with `make wazuh-certs`.
+services/gos_siem/config/wazuh_indexer_ssl_certs/

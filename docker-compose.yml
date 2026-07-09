@@ -57,8 +57,14 @@ services:
       USER_USERNAME: ${USER_USERNAME}
       USER_PASSWORD: ${USER_PASSWORD}
       GOS_DOMAIN: ${GOS_DOMAIN}
+      # Эти параметры используются для предварительной настройки Thunderbird.
+      MAIL_DOMAIN: ${MAIL_DOMAIN}
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
+      MAIL_USER: ${MAIL_USER}
     depends_on:
       gos_dns:
+        condition: service_healthy
+      gos_mail:
         condition: service_healthy
       gos_web:
         condition: service_started
@@ -85,6 +91,10 @@ services:
       GOS_ARM_USER_IP: ${GOS_ARM_USER_IP}
       GOS_WEB_INTERNAL_IP: ${GOS_WEB_INTERNAL_IP}
       GOS_DB_IP: ${GOS_DB_IP}
+      GOS_MAIL_IP: ${GOS_MAIL_IP}
+      GOS_WAZUH_MANAGER_IP: ${GOS_WAZUH_MANAGER_IP}
+      GOS_WAZUH_INDEXER_IP: ${GOS_WAZUH_INDEXER_IP}
+      GOS_WAZUH_DASHBOARD_IP: ${GOS_WAZUH_DASHBOARD_IP}
     networks:
       internal_net:
         ipv4_address: ${GOS_DNS_IP}
@@ -99,6 +109,203 @@ services:
       timeout: 5s
       retries: 12
       start_period: 10s
+
+  # Почтовый сервер лабораторной зоны.
+  # Один контейнер с Postfix для SMTP и Dovecot для IMAP.
+  gos_mail:
+    <<: *common_env_file
+    build:
+      context: ./services/gos_mail
+    container_name: gos_mail
+    hostname: gos_mail
+    restart: unless-stopped
+    environment:
+      # Почтовый домен и учетная запись создаются в services/gos_mail/start.sh.
+      MAIL_DOMAIN: ${MAIL_DOMAIN}
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      GOS_DNS_IP: ${GOS_DNS_IP}
+    depends_on:
+      gos_dns:
+        condition: service_healthy
+    volumes:
+      # Домашний каталог пользователя содержит Maildir с письмами.
+      - mail_home:/home
+    networks:
+      # Почтовый сервер доступен только из внутренней лабораторной сети.
+      internal_net:
+        ipv4_address: ${GOS_MAIL_IP}
+        aliases:
+          - mail.${GOS_DOMAIN}
+          - smtp.${GOS_DOMAIN}
+          - imap.${GOS_DOMAIN}
+    dns:
+      - ${GOS_DNS_IP}
+    healthcheck:
+      # Проверяем SMTP, IMAP и submission-порт внутри контейнера.
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 25 && nc -z 127.0.0.1 143 && nc -z 127.0.0.1 587"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Одноразовый генератор TLS-сертификатов для Wazuh Indexer/Manager/Dashboard.
+  # Сертификаты хранятся в Docker volume, а не в git-репозитории.
+  gos_siem_certs:
+    image: wazuh/wazuh-certs-generator:0.0.2
+    platform: linux/amd64
+    container_name: gos_siem_certs
+    hostname: wazuh-certs-generator
+    restart: "no"
+    # Генератор Wazuh падает при повторном запуске, если сертификаты уже существуют.
+    # Обертка делает сервис идемпотентным: готовый volume не пересоздается и не блокирует make up.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -s /certificates/root-ca.pem ] && [ -s /certificates/wazuh.indexer-key.pem ] && [ -s /certificates/wazuh.manager-key.pem ] && [ -s /certificates/wazuh.dashboard-key.pem ]; then
+          echo "Wazuh certificates already exist, skipping generation."
+          exit 0
+        fi
+        exec /entrypoint.sh
+    volumes:
+      - wazuh_certs:/certificates
+      - ./services/gos_siem/config/certs.yml:/config/certs.yml:ro
+    networks:
+      internal_net:
+
+  # Wazuh Manager: принимает события и регистрацию агентов.
+  # Агенты на лабораторные машины здесь не устанавливаются.
+  gos_siem_manager:
+    image: wazuh/wazuh-manager:${WAZUH_VERSION}
+    platform: linux/amd64
+    container_name: gos_siem_manager
+    hostname: wazuh.manager
+    restart: unless-stopped
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 655360
+        hard: 655360
+    environment:
+      # Manager отправляет события в indexer и предоставляет API для dashboard.
+      INDEXER_URL: https://wazuh.indexer:9200
+      INDEXER_USERNAME: ${WAZUH_INDEXER_USERNAME}
+      INDEXER_PASSWORD: ${WAZUH_INDEXER_PASSWORD}
+      FILEBEAT_SSL_VERIFICATION_MODE: full
+      SSL_CERTIFICATE_AUTHORITIES: /wazuh-certs/root-ca-manager.pem
+      SSL_CERTIFICATE: /wazuh-certs/wazuh.manager.pem
+      SSL_KEY: /wazuh-certs/wazuh.manager-key.pem
+      API_USERNAME: ${WAZUH_API_USERNAME}
+      API_PASSWORD: ${WAZUH_API_PASSWORD}
+    depends_on:
+      gos_siem_certs:
+        condition: service_completed_successfully
+      gos_siem_indexer:
+        condition: service_started
+    volumes:
+      # Persistent volumes Wazuh Manager.
+      - wazuh_api_configuration:/var/ossec/api/configuration
+      - wazuh_etc:/var/ossec/etc
+      - wazuh_logs:/var/ossec/logs
+      - wazuh_queue:/var/ossec/queue
+      - wazuh_var_multigroups:/var/ossec/var/multigroups
+      - wazuh_integrations:/var/ossec/integrations
+      - wazuh_active_response:/var/ossec/active-response/bin
+      - wazuh_agentless:/var/ossec/agentless
+      - wazuh_wodles:/var/ossec/wodles
+      - filebeat_etc:/etc/filebeat
+      - filebeat_var:/var/lib/filebeat
+      # TLS-сертификаты генерируются gos_siem_certs в Docker volume.
+      - wazuh_certs:/wazuh-certs:ro
+      - ./services/gos_siem/config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf:ro
+    networks:
+      internal_net:
+        ipv4_address: ${GOS_WAZUH_MANAGER_IP}
+        aliases:
+          - wazuh.manager
+          - wazuh.${GOS_DOMAIN}
+          - wazuh-manager.${GOS_DOMAIN}
+          - gos-siem-manager.${GOS_DOMAIN}
+    dns:
+      - ${GOS_DNS_IP}
+
+  # Wazuh Indexer: хранит события и индексы для dashboard.
+  gos_siem_indexer:
+    image: wazuh/wazuh-indexer:${WAZUH_VERSION}
+    platform: linux/amd64
+    container_name: gos_siem_indexer
+    hostname: wazuh.indexer
+    restart: unless-stopped
+    depends_on:
+      gos_siem_certs:
+        condition: service_completed_successfully
+    environment:
+      # Для лабораторной уменьшаем heap относительно production-рекомендаций.
+      OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      # Persistent volume с данными indexer.
+      - wazuh_indexer_data:/var/lib/wazuh-indexer
+      - wazuh_certs:/usr/share/wazuh-indexer/config/certs:ro
+      - ./services/gos_siem/config/wazuh_indexer/wazuh.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml:ro
+      - ./services/gos_siem/config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml:ro
+    networks:
+      internal_net:
+        ipv4_address: ${GOS_WAZUH_INDEXER_IP}
+        aliases:
+          - wazuh.indexer
+          - wazuh-indexer.${GOS_DOMAIN}
+          - gos-siem-indexer.${GOS_DOMAIN}
+    dns:
+      - ${GOS_DNS_IP}
+
+  # Wazuh Dashboard: web-интерфейс SIEM.
+  gos_siem_dashboard:
+    image: wazuh/wazuh-dashboard:${WAZUH_VERSION}
+    platform: linux/amd64
+    container_name: gos_siem_dashboard
+    hostname: wazuh.dashboard
+    restart: unless-stopped
+    environment:
+      # Dashboard подключается к indexer и Wazuh Manager API.
+      INDEXER_USERNAME: ${WAZUH_INDEXER_USERNAME}
+      INDEXER_PASSWORD: ${WAZUH_INDEXER_PASSWORD}
+      WAZUH_API_URL: https://wazuh.manager
+      DASHBOARD_USERNAME: ${WAZUH_DASHBOARD_USERNAME}
+      DASHBOARD_PASSWORD: ${WAZUH_DASHBOARD_PASSWORD}
+      API_USERNAME: ${WAZUH_API_USERNAME}
+      API_PASSWORD: ${WAZUH_API_PASSWORD}
+    depends_on:
+      gos_siem_indexer:
+        condition: service_started
+      gos_siem_manager:
+        condition: service_started
+    volumes:
+      # TLS и настройки dashboard берутся из official Wazuh single-node конфигов.
+      - wazuh_certs:/usr/share/wazuh-dashboard/certs:ro
+      - ./services/gos_siem/config/wazuh_dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
+      - ./services/gos_siem/config/wazuh_dashboard/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml:ro
+      - wazuh_dashboard_config:/usr/share/wazuh-dashboard/data/wazuh/config
+      - wazuh_dashboard_custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+    networks:
+      internal_net:
+        ipv4_address: ${GOS_WAZUH_DASHBOARD_IP}
+        aliases:
+          - wazuh.dashboard
+          - siem.${GOS_DOMAIN}
+          - wazuh-dashboard.${GOS_DOMAIN}
+          - gos-siem.${GOS_DOMAIN}
+    dns:
+      - ${GOS_DNS_IP}
 
   # Web-машина из infra.pdf: Ubuntu + nginx + PHP-FPM + EspoCRM.
   # Nginx здесь установлен явно, потому что одно из учебных заданий - обновление nginx.
@@ -211,3 +418,23 @@ volumes:
   espocrm_client_custom:
   # Persistent volume MariaDB.
   espocrm_db:
+  # Persistent volume почтового ящика.
+  mail_home:
+  # Runtime-generated TLS certificates for Wazuh.
+  wazuh_certs:
+  # Persistent volumes Wazuh Manager.
+  wazuh_api_configuration:
+  wazuh_etc:
+  wazuh_logs:
+  wazuh_queue:
+  wazuh_var_multigroups:
+  wazuh_integrations:
+  wazuh_active_response:
+  wazuh_agentless:
+  wazuh_wodles:
+  filebeat_etc:
+  filebeat_var:
+  # Persistent volumes Wazuh Indexer/Dashboard.
+  wazuh_indexer_data:
+  wazuh_dashboard_config:
+  wazuh_dashboard_custom:

@@ -75,6 +75,7 @@ cat >/etc/bind/db.$domain <<EOF
   300 )
 
 @              IN NS ns.$domain.
+@              IN MX 10 mail.$domain.
 ns             IN A  ${GOS_DNS_IP}
 dns            IN A  ${GOS_DNS_IP}
 gos-dns        IN A  ${GOS_DNS_IP}
@@ -87,6 +88,18 @@ web            IN A  ${GOS_WEB_INTERNAL_IP}
 gos-web        IN A  ${GOS_WEB_INTERNAL_IP}
 db             IN A  ${GOS_DB_IP}
 gos-db         IN A  ${GOS_DB_IP}
+mail           IN A  ${GOS_MAIL_IP}
+smtp           IN A  ${GOS_MAIL_IP}
+imap           IN A  ${GOS_MAIL_IP}
+gos-mail       IN A  ${GOS_MAIL_IP}
+wazuh          IN A  ${GOS_WAZUH_MANAGER_IP}
+wazuh-manager  IN A  ${GOS_WAZUH_MANAGER_IP}
+gos-siem-manager IN A ${GOS_WAZUH_MANAGER_IP}
+wazuh-indexer  IN A  ${GOS_WAZUH_INDEXER_IP}
+gos-siem-indexer IN A ${GOS_WAZUH_INDEXER_IP}
+siem           IN A  ${GOS_WAZUH_DASHBOARD_IP}
+wazuh-dashboard IN A ${GOS_WAZUH_DASHBOARD_IP}
+gos-siem       IN A  ${GOS_WAZUH_DASHBOARD_IP}
 EOF
 
 # Проверяем синтаксис Bind-конфигов до запуска named.
