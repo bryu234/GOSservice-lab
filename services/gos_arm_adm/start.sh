@@ -8,6 +8,16 @@ set -euo pipefail
 # Значения по умолчанию нужны только для безопасного старта при ручном запуске.
 admin_user="${LOCALADMIN_USER:-localadmin}"
 admin_password="${LOCALADMIN_PASSWORD:-CHANGE_ME_LOCALADMIN_PASSWORD}"
+default_user="ubuntu"
+
+# Базовый RDP-образ содержит дефолтного пользователя ubuntu.
+# При публикации SSH наружу это опасно: закрываем вход под ним и убираем SSH-ключи.
+if id "$default_user" >/dev/null 2>&1 && [ "$default_user" != "$admin_user" ]; then
+  pkill -KILL -u "$default_user" >/dev/null 2>&1 || true
+  passwd -l "$default_user" >/dev/null 2>&1 || true
+  usermod -s /usr/sbin/nologin "$default_user" >/dev/null 2>&1 || true
+  rm -rf "/home/$default_user/.ssh"
+fi
 
 # Создаем локального пользователя, если контейнер стартует впервые.
 if ! id "$admin_user" >/dev/null 2>&1; then
@@ -40,6 +50,8 @@ ssh-keygen -A >/dev/null 2>&1 || true
 # Root-login запрещен, вход выполняется под LOCALADMIN_USER.
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || true
+sed -i '/^AllowUsers /d' /etc/ssh/sshd_config || true
+echo "AllowUsers $admin_user" >>/etc/ssh/sshd_config
 
 # Запускаем системные логи и SSH. rsyslog может ругаться на /proc/kmsg
 # внутри контейнера, поэтому ошибка не должна валить весь контейнер.

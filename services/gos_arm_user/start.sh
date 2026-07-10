@@ -15,6 +15,16 @@ mail_user="${MAIL_USER:-$user_name}"
 mail_address="${mail_user}@${mail_domain}"
 imap_host="imap.${mail_domain}"
 smtp_host="smtp.${mail_domain}"
+default_user="ubuntu"
+
+# Базовый RDP-образ содержит дефолтного пользователя ubuntu.
+# В лабораторной должны работать только USER_USERNAME и LOCALADMIN_USER.
+if id "$default_user" >/dev/null 2>&1 && [ "$default_user" != "$user_name" ] && [ "$default_user" != "$admin_user" ]; then
+  pkill -KILL -u "$default_user" >/dev/null 2>&1 || true
+  passwd -l "$default_user" >/dev/null 2>&1 || true
+  usermod -s /usr/sbin/nologin "$default_user" >/dev/null 2>&1 || true
+  rm -rf "/home/$default_user/.ssh"
+fi
 
 # Создаем локального пользователя, если контейнер стартует впервые.
 if ! id "$user_name" >/dev/null 2>&1; then
@@ -48,6 +58,8 @@ ssh-keygen -A >/dev/null 2>&1 || true
 # Root-login запрещен, вход выполняется под USER_USERNAME.
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || true
+sed -i '/^AllowUsers /d' /etc/ssh/sshd_config || true
+echo "AllowUsers $user_name $admin_user" >>/etc/ssh/sshd_config
 
 # Запускаем SSHD. В отличие от adm-машины, sudo и инструменты анализа трафика
 # здесь не настраиваются, потому что это обычная пользовательская станция.
