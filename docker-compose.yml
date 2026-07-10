@@ -107,7 +107,6 @@ services:
         aliases:
           # DNS-safe имена для обращения внутри docker-сети.
           - dns.${GOS_DOMAIN}
-          - ns.${GOS_DOMAIN}
     dns:
       - ${GOS_DNS_IP}
     healthcheck:
@@ -244,8 +243,6 @@ services:
         aliases:
           - wazuh.manager
           - wazuh.${GOS_DOMAIN}
-          - wazuh-manager.${GOS_DOMAIN}
-          - gos-siem-manager.${GOS_DOMAIN}
     dns:
       - ${GOS_DNS_IP}
 
@@ -281,7 +278,6 @@ services:
         aliases:
           - wazuh.indexer
           - wazuh-indexer.${GOS_DOMAIN}
-          - gos-siem-indexer.${GOS_DOMAIN}
     dns:
       - ${GOS_DNS_IP}
 
@@ -323,8 +319,6 @@ services:
         aliases:
           - wazuh.dashboard
           - siem.${GOS_DOMAIN}
-          - wazuh-dashboard.${GOS_DOMAIN}
-          - gos-siem.${GOS_DOMAIN}
     dns:
       - ${GOS_DNS_IP}
 
@@ -379,9 +373,8 @@ services:
       internal_net:
         ipv4_address: ${GOS_WEB_INTERNAL_IP}
         aliases:
-          # Основное имя CRM и короткий alias для диагностики.
+          # Основное имя CRM.
           - crm.${GOS_DOMAIN}
-          - web.${GOS_DOMAIN}
       # Внешняя сеть закрепляет отдельный внешний IP web-машины.
       external_net:
         ipv4_address: ${GOS_WEB_EXTERNAL_IP}
@@ -390,7 +383,10 @@ services:
 
   # База данных EspoCRM.
   gos_db:
-    image: mariadb:11.4
+    <<: *common_env_file
+    build:
+      context: ./services/gos_db
+    image: ${COMPOSE_PROJECT_NAME:-gosservice_lab}-gos_db
     container_name: gos_db
     hostname: gos_db
     restart: unless-stopped
@@ -400,6 +396,9 @@ services:
       MYSQL_USER: ${ESPOCRM_DB_USER}
       MYSQL_PASSWORD: ${ESPOCRM_DB_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${ESPOCRM_DB_ROOT_PASSWORD}
+      # Админская учетная запись для SSH с adm-машины.
+      LOCALADMIN_USER: ${LOCALADMIN_USER}
+      LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
     volumes:
       # Данные БД должны переживать restart контейнера.
       - espocrm_db:/var/lib/mysql
@@ -417,6 +416,35 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  # Одноразовый сервис наполнения EspoCRM тестовыми контактами.
+  # Он оставлен обычным сервисом, чтобы наполнение запускалось даже при прямом docker compose up.
+  gos_db_seed:
+    <<: *common_env_file
+    image: ${COMPOSE_PROJECT_NAME:-gosservice_lab}-gos_db
+    container_name: gos_db_seed
+    hostname: gos_db_seed
+    restart: "no"
+    # Запускаем скрипт напрямую, без MariaDB entrypoint и без sshd.
+    entrypoint: ["/usr/local/bin/fill_db.sh"]
+    environment:
+      ESPOCRM_DB_HOST: gos_db
+      ESPOCRM_DB_NAME: ${ESPOCRM_DB_NAME}
+      ESPOCRM_DB_USER: ${ESPOCRM_DB_USER}
+      ESPOCRM_DB_PASSWORD: ${ESPOCRM_DB_PASSWORD}
+      LOCALADMIN_USER: ${LOCALADMIN_USER}
+      LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
+    depends_on:
+      gos_db:
+        condition: service_healthy
+      gos_web:
+        condition: service_healthy
+      gos_dns:
+        condition: service_healthy
+    networks:
+      internal_net:
+    dns:
+      - ${GOS_DNS_IP}
 
 networks:
   # Внутренняя сеть: DNS, adm, user, DB и внутренний интерфейс web.
