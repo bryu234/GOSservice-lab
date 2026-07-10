@@ -58,12 +58,8 @@ echo "AllowUsers $admin_user" >>/etc/ssh/sshd_config
 rsyslogd || true
 /usr/sbin/sshd
 
-# В scottyhardy/docker-remote-desktop основной RDP/XRDP запуск спрятан
-# в /usr/bin/entrypoint. После нашей подготовки передаем управление ему.
-if [ -x /usr/bin/entrypoint ]; then
-  exec /usr/bin/entrypoint "$@"
-fi
-
-# Fallback на случай изменения базового образа: держим контейнер живым,
-# чтобы можно было зайти внутрь и диагностировать проблему.
-tail -f /dev/null
+# Запускаем XRDP напрямую, без /usr/bin/entrypoint базового образа.
+# Базовый entrypoint пересоздает дефолтного пользователя ubuntu, поэтому
+# здесь намеренно запускаются только нужные RDP-процессы.
+/usr/sbin/xrdp-sesman
+exec /usr/sbin/xrdp --nodaemon
