@@ -3,6 +3,8 @@ set -euo pipefail
 
 ESPO_DIR=/var/www/espocrm
 PHP_FPM_BIN=/usr/sbin/php-fpm8.3
+admin_user="${LOCALADMIN_USER:-localadmin}"
+admin_password="${LOCALADMIN_PASSWORD:-CHANGE_ME_LOCALADMIN_PASSWORD}"
 
 # Кодируем значения для передачи в install/cli.php через query-string.
 urlencode() {
@@ -69,6 +71,27 @@ prepare_permissions() {
         "$ESPO_DIR/install"
 }
 
+# Создает локального администратора для SSH-доступа с adm-машины.
+setup_admin_ssh() {
+    if ! id "$admin_user" >/dev/null 2>&1; then
+        useradd -m -s /bin/bash "$admin_user"
+    fi
+
+    echo "$admin_user:$admin_password" | chpasswd
+    usermod -aG sudo "$admin_user"
+
+    cat >/etc/sudoers.d/gos-localadmin <<EOF
+$admin_user ALL=(ALL:ALL) ALL
+EOF
+    chmod 0440 /etc/sudoers.d/gos-localadmin
+
+    mkdir -p /run/sshd
+    chmod 755 /run/sshd
+    ssh-keygen -A >/dev/null 2>&1 || true
+    sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+    sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || true
+}
+
 # Первичная установка EspoCRM выполняется один раз.
 # Признак установки хранится в data/config.php внутри persistent volume.
 install_espocrm_if_needed() {
@@ -113,10 +136,14 @@ install_espocrm_if_needed() {
 }
 
 prepare_permissions
+setup_admin_ssh
 wait_for_database
 install_espocrm_if_needed
 
-# PHP-FPM запускаем как daemon, nginx оставляем foreground-процессом контейнера.
+# SSHD и PHP-FPM запускаем как daemon, nginx оставляем foreground-процессом контейнера.
+echo "Starting SSHD..."
+/usr/sbin/sshd
+
 echo "Starting PHP-FPM..."
 "$PHP_FPM_BIN" -D
 

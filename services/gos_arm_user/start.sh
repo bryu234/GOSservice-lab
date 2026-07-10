@@ -8,6 +8,8 @@ set -euo pipefail
 # Значения по умолчанию нужны только для безопасного старта при ручном запуске.
 user_name="${USER_USERNAME:-user}"
 user_password="${USER_PASSWORD:-CHANGE_ME_USER_PASSWORD}"
+admin_user="${LOCALADMIN_USER:-localadmin}"
+admin_password="${LOCALADMIN_PASSWORD:-CHANGE_ME_LOCALADMIN_PASSWORD}"
 mail_domain="${MAIL_DOMAIN:-${GOS_DOMAIN:-gos.local}}"
 mail_user="${MAIL_USER:-$user_name}"
 mail_address="${mail_user}@${mail_domain}"
@@ -22,6 +24,20 @@ fi
 # Обновляем пароль на каждом старте, чтобы смена USER_PASSWORD в .env
 # применялась после перезапуска контейнера.
 echo "$user_name:$user_password" | chpasswd
+
+# Дополнительная админская учетная запись нужна для установки пакетов
+# и диагностики user-машины с adm под тем же LOCALADMIN_USER.
+if ! id "$admin_user" >/dev/null 2>&1; then
+  useradd -m -s /bin/bash "$admin_user"
+fi
+
+echo "$admin_user:$admin_password" | chpasswd
+usermod -aG sudo "$admin_user"
+
+cat >/etc/sudoers.d/gos-localadmin <<EOF
+$admin_user ALL=(ALL:ALL) ALL
+EOF
+chmod 0440 /etc/sudoers.d/gos-localadmin
 
 # Готовим runtime-директорию SSHD и генерируем host keys, если их еще нет.
 mkdir -p /run/sshd

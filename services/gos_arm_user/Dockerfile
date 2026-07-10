@@ -11,11 +11,13 @@ ENV DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC
 
 # Устанавливаем только пользовательский минимум:
 # - thunderbird нужен как почтовый клиент;
-# - openssh-server нужен для SSH-доступа на user-машину.
+# - openssh-server нужен для SSH-доступа на user-машину;
+# - sudo нужен только для отдельной админской учетной записи localadmin.
 # Административные инструменты из adm-образа сюда намеренно не ставим.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       openssh-server \
+      sudo \
       thunderbird && \
     rm -rf /var/lib/apt/lists/*
 

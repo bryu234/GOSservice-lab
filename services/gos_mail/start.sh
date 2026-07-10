@@ -13,6 +13,8 @@ mail_domain="${MAIL_DOMAIN:-${GOS_DOMAIN:-gos.local}}"
 mail_hostname="${MAIL_HOSTNAME:-mail.${mail_domain}}"
 mail_user="${MAIL_USER:-user}"
 mail_password="${MAIL_PASSWORD:-CHANGE_ME_MAIL_PASSWORD}"
+admin_user="${LOCALADMIN_USER:-localadmin}"
+admin_password="${LOCALADMIN_PASSWORD:-CHANGE_ME_LOCALADMIN_PASSWORD}"
 
 # Создаем локального пользователя, чей домашний каталог хранится в volume.
 # Dovecot использует системную PAM-аутентификацию, поэтому отдельной БД паролей нет.
@@ -86,6 +88,27 @@ dovecot -n >/dev/null
 # Если файл создали вручную во время диагностики, удаляем его при старте.
 rm -f /var/log/mail.log
 
-# Postfix запускаем как сервис в фоне, Dovecot держит контейнер в foreground.
+# Локальный администратор нужен для SSH-доступа с adm-машины.
+if ! id "$admin_user" >/dev/null 2>&1; then
+  useradd -m -s /bin/bash "$admin_user"
+fi
+
+echo "$admin_user:$admin_password" | chpasswd
+usermod -aG sudo "$admin_user"
+
+cat >/etc/sudoers.d/gos-localadmin <<EOF
+$admin_user ALL=(ALL:ALL) ALL
+EOF
+chmod 0440 /etc/sudoers.d/gos-localadmin
+
+# Включаем SSH по паролю только для внутренних лабораторных подключений.
+mkdir -p /run/sshd
+chmod 755 /run/sshd
+ssh-keygen -A >/dev/null 2>&1 || true
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || true
+
+# Postfix и sshd запускаем как сервисы в фоне, Dovecot держит контейнер в foreground.
 postfix start
+/usr/sbin/sshd
 exec dovecot -F

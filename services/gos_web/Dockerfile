@@ -13,7 +13,8 @@ ENV ESPOCRM_VERSION=${ESPOCRM_VERSION}
 # Системные пакеты:
 # - build-essential/libpcre/zlib/ssl нужны для сборки nginx;
 # - PHP-FPM и расширения нужны EspoCRM;
-# - mariadb-client нужен health/startup-проверкам доступа к gos_db.
+# - mariadb-client нужен health/startup-проверкам доступа к gos_db;
+# - openssh-server/sudo/nano нужны для администрирования с adm-машины.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -24,6 +25,8 @@ RUN apt-get update \
         libssl-dev \
         unzip \
         mariadb-client \
+        nano \
+        openssh-server \
         php8.3-cli \
         php8.3-fpm \
         php8.3-mysql \
@@ -36,6 +39,7 @@ RUN apt-get update \
         php8.3-xml \
         php8.3-zip \
         php8.3-bcmath \
+        sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Сборка nginx нужной версии из официального tar.gz.
@@ -84,6 +88,7 @@ RUN chmod +x /usr/local/bin/gos-web-start.sh
 
 WORKDIR /var/www/espocrm
 
-EXPOSE 80
+# SSH и HTTP доступны только через docker-сети/compose-публикацию.
+EXPOSE 22 80
 
 CMD ["/usr/local/bin/gos-web-start.sh"]

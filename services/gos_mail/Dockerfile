@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Устанавливаем классический почтовый стек:
 # - postfix принимает и доставляет SMTP-почту;
 # - dovecot отдает почтовый ящик по IMAP;
+# - openssh-server/sudo/nano нужны для администрирования с adm-машины;
 # - netcat-openbsd используется healthcheck'ом compose.
 # Логирование почты в /var/log/mail.log намеренно не включаем для лабораторной.
 RUN set -eux; \
@@ -18,15 +19,18 @@ RUN set -eux; \
       dovecot-imapd \
       dovecot-lmtpd \
       netcat-openbsd \
+      nano \
+      openssh-server \
       postfix \
-      procps; \
+      procps \
+      sudo; \
     rm -rf /var/lib/apt/lists/*
 
 # Скрипт на каждом старте генерирует конфиги из .env и создает mailbox.
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 
-# SMTP, IMAP и SMTP submission доступны только внутри docker-сети.
-EXPOSE 25 143 587
+# SSH, SMTP, IMAP и SMTP submission доступны только внутри docker-сети.
+EXPOSE 22 25 143 587
 
 CMD ["/usr/local/bin/start.sh"]

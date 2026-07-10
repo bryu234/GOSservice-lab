@@ -4,8 +4,8 @@ FROM ubuntu:22.04
 # Отключаем интерактивные prompts apt/dpkg и фиксируем timezone внутри контейнера.
 ENV DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC
 
-# Устанавливаем Bind9 как DNS-сервер, dnsutils для healthcheck/диагностики
-# и rsyslog для базового логирования.
+# Устанавливаем Bind9 как DNS-сервер, dnsutils для healthcheck/диагностики,
+# SSH/sudo для администрирования с adm-машины и rsyslog для базового логирования.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       bind9 \
@@ -13,6 +13,8 @@ RUN apt-get update && \
       dnsutils \
       iputils-ping \
       nano \
+      openssh-server \
+      sudo \
       rsyslog && \
     rm -rf /var/lib/apt/lists/*
 
@@ -20,8 +22,8 @@ RUN apt-get update && \
 COPY start.sh /usr/local/bin/gos-dns-start
 RUN chmod +x /usr/local/bin/gos-dns-start
 
-# DNS слушает TCP/UDP 53 внутри docker-сети.
-EXPOSE 53/tcp 53/udp
+# DNS слушает TCP/UDP 53, SSH слушает 22 только внутри docker-сети.
+EXPOSE 22/tcp 53/tcp 53/udp
 
 # Запускаем генерацию конфигов и named.
 CMD ["/usr/local/bin/gos-dns-start"]

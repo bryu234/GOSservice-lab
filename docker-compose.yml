@@ -56,6 +56,9 @@ services:
       # Учетная запись создается в services/gos_arm_user/start.sh.
       USER_USERNAME: ${USER_USERNAME}
       USER_PASSWORD: ${USER_PASSWORD}
+      # Дополнительная админская учетная запись для SSH/sudo внутри user-машины.
+      LOCALADMIN_USER: ${LOCALADMIN_USER}
+      LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
       GOS_DOMAIN: ${GOS_DOMAIN}
       # Эти параметры используются для предварительной настройки Thunderbird.
       MAIL_DOMAIN: ${MAIL_DOMAIN}
@@ -95,6 +98,9 @@ services:
       GOS_WAZUH_MANAGER_IP: ${GOS_WAZUH_MANAGER_IP}
       GOS_WAZUH_INDEXER_IP: ${GOS_WAZUH_INDEXER_IP}
       GOS_WAZUH_DASHBOARD_IP: ${GOS_WAZUH_DASHBOARD_IP}
+      # Админская учетная запись для SSH с adm-машины.
+      LOCALADMIN_USER: ${LOCALADMIN_USER}
+      LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
     networks:
       internal_net:
         ipv4_address: ${GOS_DNS_IP}
@@ -102,6 +108,8 @@ services:
           # DNS-safe имена для обращения внутри docker-сети.
           - dns.${GOS_DOMAIN}
           - ns.${GOS_DOMAIN}
+    dns:
+      - ${GOS_DNS_IP}
     healthcheck:
       # Проверяем, что зона загружена и crm.gos.local резолвится в IP web-сервера.
       test: ["CMD-SHELL", "dig @127.0.0.1 crm.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_INTERNAL_IP}'"]
@@ -126,6 +134,9 @@ services:
       MAIL_USER: ${MAIL_USER}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       GOS_DNS_IP: ${GOS_DNS_IP}
+      # Админская учетная запись для SSH с adm-машины.
+      LOCALADMIN_USER: ${LOCALADMIN_USER}
+      LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
     depends_on:
       gos_dns:
         condition: service_healthy
@@ -177,6 +188,8 @@ services:
       - ./services/gos_siem/config/certs.yml:/config/certs.yml:ro
     networks:
       internal_net:
+    dns:
+      - ${GOS_DNS_IP}
 
   # Wazuh Manager: принимает события и регистрацию агентов.
   # Агенты на лабораторные машины здесь не устанавливаются.
@@ -339,6 +352,9 @@ services:
       ESPOCRM_ADMIN_USERNAME: ${ESPOCRM_ADMIN_USERNAME}
       ESPOCRM_ADMIN_PASSWORD: ${ESPOCRM_ADMIN_PASSWORD}
       ESPOCRM_SITE_URL: http://crm.${GOS_DOMAIN}
+      # Админская учетная запись для SSH с adm-машины.
+      LOCALADMIN_USER: ${LOCALADMIN_USER}
+      LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
     depends_on:
       # Web стартует только после готовой БД и загруженной DNS-зоны.
       gos_db:
