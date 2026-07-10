@@ -24,4 +24,4 @@ services:
   gos_siem_dashboard:
     ports:
       # HTTPS к Wazuh Dashboard: внешний порт задается WAZUH_DASHBOARD_HOST_PORT в .env.
-      - "127.0.0.1:${WAZUH_DASHBOARD_HOST_PORT}:5601/tcp"
+      - "127.0.0.1:${WAZUH_DASHBOARD_HOST_PORT}:443/tcp"

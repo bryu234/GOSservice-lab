@@ -24,4 +24,4 @@ services:
   gos_siem_dashboard:
     ports:
       # HTTPS к Wazuh Dashboard снаружи VM.
-      - "0.0.0.0:${WAZUH_DASHBOARD_HOST_PORT}:5601/tcp"
+      - "0.0.0.0:${WAZUH_DASHBOARD_HOST_PORT}:443/tcp"

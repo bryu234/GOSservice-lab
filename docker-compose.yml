@@ -279,6 +279,10 @@ services:
     container_name: gos_siem_dashboard
     hostname: wazuh.dashboard
     restart: unless-stopped
+    cap_add:
+      # Dashboard слушает 443 внутри lab-сети, чтобы https://siem.gos.local
+      # открывался без указания порта.
+      - NET_BIND_SERVICE
     environment:
       # Dashboard подключается к indexer и Wazuh Manager API.
       INDEXER_USERNAME: ${WAZUH_INDEXER_USERNAME}
