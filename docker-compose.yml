@@ -164,10 +164,14 @@ services:
     command:
       - |
         if [ -s /certificates/root-ca.pem ] && [ -s /certificates/wazuh.indexer-key.pem ] && [ -s /certificates/wazuh.manager-key.pem ] && [ -s /certificates/wazuh.dashboard-key.pem ]; then
-          echo "Wazuh certificates already exist, skipping generation."
+          echo "Wazuh certificates already exist, fixing permissions and skipping generation."
+          chmod 755 /certificates
           exit 0
         fi
-        exec /entrypoint.sh
+        /entrypoint.sh
+        status=$$?
+        chmod 755 /certificates || true
+        exit $$status
     volumes:
       - wazuh_certs:/certificates
       - ./services/gos_siem/config/certs.yml:/config/certs.yml:ro
