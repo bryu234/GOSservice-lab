@@ -1,31 +1,4 @@
-# Сборка PulseAudio-модулей XRDP в отдельном stage,
-# чтобы не оставлять compiler и build dependencies в итоговом desktop-образе.
 ARG UBUNTU_VERSION=24.04
-FROM ubuntu:${UBUNTU_VERSION} AS pulseaudio-builder
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      autoconf \
-      build-essential \
-      ca-certificates \
-      dpkg-dev \
-      git \
-      libltdl-dev \
-      libpulse-dev \
-      libtool \
-      lsb-release \
-      sudo && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN git clone https://github.com/neutrinolabs/pulseaudio-module-xrdp.git /pulseaudio-module-xrdp
-WORKDIR /pulseaudio-module-xrdp
-RUN scripts/install_pulseaudio_sources_apt.sh && \
-    ./bootstrap && \
-    ./configure PULSE_DIR=/root/pulseaudio.src && \
-    make -j"$(nproc)" && \
-    make install DESTDIR=/tmp/install
 
 # Административная рабочая станция собирается напрямую из официального Ubuntu.
 # В образе нет заранее созданных interactive-пользователей.
@@ -40,8 +13,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Etc/UTC \
     LANG=en_US.UTF-8
 
-# Воспроизводим desktop-слой прежнего образа: XFCE, XRDP/Xorg, D-Bus,
-# PulseAudio, Firefox, Xubuntu icons и X11 utilities.
+# Воспроизводим desktop-слой: XFCE, XRDP/Xorg, D-Bus, Firefox,
+# Xubuntu icons и X11 utilities.
 # Дополнительно сохраняем прежний набор инструментов администратора:
 # - openssh-server нужен для SSH-доступа на adm;
 # - dnsutils/curl/nmap/net-tools/iproute2 нужны для сетевой диагностики;
@@ -63,9 +36,6 @@ RUN apt-get update && \
       nmap \
       openssh-client \
       openssh-server \
-      pavucontrol \
-      pulseaudio \
-      pulseaudio-utils \
       rsyslog \
       software-properties-common \
       sudo \
@@ -75,7 +45,6 @@ RUN apt-get update && \
       x11-xserver-utils \
       xfce4 \
       xfce4-goodies \
-      xfce4-pulseaudio-plugin \
       xorgxrdp \
       xrdp \
       xubuntu-icon-theme && \
@@ -93,10 +62,6 @@ RUN apt-get update && \
 # Актуальный официальный ubuntu:24.04 содержит пользователя ubuntu с UID 1000.
 # Удаляем его на этапе сборки: рабочие учетные записи создает только start.sh из .env.
 RUN if id ubuntu >/dev/null 2>&1; then userdel --remove ubuntu; fi
-
-# Добавляем только собранные PulseAudio-модули XRDP, без toolchain builder-stage.
-COPY --from=pulseaudio-builder /tmp/install /
-RUN sed -i 's|^Exec=.*|Exec=/usr/bin/pulseaudio|' /etc/xdg/autostart/pulseaudio-xrdp.desktop
 
 # Существующий entrypoint без изменений создает локального администратора,
 # запускает SSH и напрямую запускает XRDP.
