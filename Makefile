@@ -93,8 +93,27 @@ check-ports: env
 
 # Проверяет и на Linux автоматически выставляет параметр, который нужен Wazuh Indexer/OpenSearch.
 # На macOS Docker Desktop этот sysctl управляется внутри VM Docker Desktop, поэтому там пропускаем настройку.
-check-wazuh-prereqs:
-	@os=$$(uname -s); \
+check-wazuh-prereqs: env
+	@set -a; . ./$(ENV_FILE); set +a; \
+	for variable in WAZUH_INDEXER_PASSWORD WAZUH_DASHBOARD_PASSWORD WAZUH_API_PASSWORD; do \
+		password=$${!variable}; \
+		if [ $${#password} -lt 8 ] || [ $${#password} -gt 64 ] \
+			|| ! printf '%s' "$$password" | grep -q '[A-Z]' \
+			|| ! printf '%s' "$$password" | grep -q '[a-z]' \
+			|| ! printf '%s' "$$password" | grep -q '[0-9]' \
+			|| ! printf '%s' "$$password" | grep -q '[^A-Za-z0-9]'; then \
+			echo "$$variable must contain 8-64 characters, uppercase, lowercase, number and symbol."; \
+			exit 1; \
+		fi; \
+	done; \
+	if [ "$$WAZUH_INDEXER_PASSWORD" != 'GosIndexer2026!' ] \
+		|| [ "$$WAZUH_DASHBOARD_PASSWORD" != 'GosDashboard2026!' ] \
+		|| [ "$$WAZUH_API_PASSWORD" != 'GosApi2026!Secure' ]; then \
+		echo "Wazuh passwords must match the tracked bcrypt hashes and dashboard API config."; \
+		echo "Use the Wazuh values from .env.example or update all matching configs together."; \
+		exit 1; \
+	fi; \
+	os=$$(uname -s); \
 	if [ "$$os" = "Linux" ]; then \
 		value=$$(sysctl -n vm.max_map_count 2>/dev/null || echo 0); \
 		case "$$value" in ""|*[!0-9]*) value=0 ;; esac; \

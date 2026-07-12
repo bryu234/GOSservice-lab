@@ -1,26 +1,22 @@
 ---
-# This is the internal user database
-# The hash value is a bcrypt hash and can be generated with plugin/tools/hash.sh
+# This is the internal user database. The admin and kibanaserver hashes match
+# the complex Wazuh passwords in .env.example.
 
 _meta:
   type: "internalusers"
   config_version: 2
 
-# Define your internal users here
-
-## Demo users
-
 admin:
-  hash: "$2y$12$eo6M/r0XShaMxe7Msw7nr.Ke4qwQu0U1nsvxfjj5Fp2hYl89EH2.C"
+  hash: "$2y$12$F6PjlhRtKWfDPSptJ1Nk6O9yTlB5XiFJ9RCcv/ibkNb7PgiR8/rEm"
   reserved: true
   backend_roles:
   - "admin"
-  description: "Demo admin user"
+  description: "GOSservice Wazuh administrator"
 
 kibanaserver:
-  hash: "$2y$12$eo6M/r0XShaMxe7Msw7nr.Ke4qwQu0U1nsvxfjj5Fp2hYl89EH2.C"
+  hash: "$2y$12$6PTZSsGtfWZO/.3eRd2zLuGIgvmUhVzChWWA/32Mzgqi7FYReE/Vq"
   reserved: true
-  description: "Demo kibanaserver user"
+  description: "Wazuh dashboard service user"
 
 kibanaro:
   hash: "$2a$12$JJSXNfTowz7Uu5ttXfeYpeYE0arACvcwlPBStB1F.MI7f0U9Z4DGC"

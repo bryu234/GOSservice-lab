@@ -163,11 +163,13 @@ services:
   # Одноразовый генератор TLS-сертификатов для Wazuh Indexer/Manager/Dashboard.
   # Сертификаты хранятся в Docker volume, а не в git-репозитории.
   gos_siem_certs:
-    image: wazuh/wazuh-certs-generator:0.0.2
+    image: wazuh/wazuh-certs-generator:0.0.4
     platform: linux/amd64
     container_name: gos_siem_certs
     hostname: wazuh-certs-generator
     restart: "no"
+    environment:
+      CERT_TOOL_VERSION: "4.14"
     # Генератор Wazuh падает при повторном запуске, если сертификаты уже существуют.
     # Обертка делает сервис идемпотентным: готовый volume не пересоздается и не блокирует make up.
     entrypoint: ["/bin/sh", "-c"]
@@ -187,8 +189,6 @@ services:
       - ./services/gos_siem/config/certs.yml:/config/certs.yml:ro
     networks:
       internal_net:
-    dns:
-      - ${GOS_DNS_IP}
 
   # Wazuh Manager: принимает события и регистрацию агентов.
   # Агенты на лабораторные машины здесь не устанавливаются.
