@@ -96,7 +96,7 @@ check-ports: env
 check-wazuh-prereqs: env
 	@set -a; . ./$(ENV_FILE); set +a; \
 	for variable in WAZUH_INDEXER_PASSWORD WAZUH_DASHBOARD_PASSWORD WAZUH_API_PASSWORD; do \
-		password=$${!variable}; \
+		eval "password=\$${$${variable}}"; \
 		if [ $${#password} -lt 8 ] || [ $${#password} -gt 64 ] \
 			|| ! printf '%s' "$$password" | grep -q '[A-Z]' \
 			|| ! printf '%s' "$$password" | grep -q '[a-z]' \
