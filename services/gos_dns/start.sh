@@ -81,6 +81,7 @@ cat >/etc/bind/db.$domain <<EOF
 dns            IN A  ${GOS_DNS_IP}
 adm            IN A  ${GOS_ARM_ADM_IP}
 user           IN A  ${GOS_ARM_USER_IP}
+router         IN A  ${GOS_ROUTER_INTERNAL_IP}
 crm            IN A  ${GOS_WEB_INTERNAL_IP}
 db             IN A  ${GOS_DB_IP}
 mail           IN A  ${GOS_MAIL_IP}

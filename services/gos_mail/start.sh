@@ -15,6 +15,8 @@ mail_user="${MAIL_USER:-user}"
 mail_password="${MAIL_PASSWORD:-CHANGE_ME_MAIL_PASSWORD}"
 admin_user="${LOCALADMIN_USER:-localadmin}"
 admin_password="${LOCALADMIN_PASSWORD:-CHANGE_ME_LOCALADMIN_PASSWORD}"
+external_subnet="${GOS_EXTERNAL_SUBNET:-172.28.8.0/24}"
+router_internal_ip="${GOS_ROUTER_INTERNAL_IP:-10.10.20.254}"
 
 # Создаем локального пользователя, чей домашний каталог хранится в volume.
 # Dovecot использует системную PAM-аутентификацию, поэтому отдельной БД паролей нет.
@@ -107,6 +109,10 @@ chmod 755 /run/sshd
 ssh-keygen -A >/dev/null 2>&1 || true
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || true
+
+# Симметричный обратный маршрут гарантирует, что ответы evil-машине проходят
+# через gos_router и наблюдаются Suricata.
+ip route replace "$external_subnet" via "$router_internal_ip"
 
 # Postfix и sshd запускаем как сервисы в фоне, Dovecot держит контейнер в foreground.
 postfix start
