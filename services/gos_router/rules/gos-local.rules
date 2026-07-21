@@ -1,0 +1,3 @@
+# Детерминированное учебное событие: любой новый HTTP-сеанс из внешнего сегмента
+# к внутреннему web-сервису фиксируется Suricata, но не блокируется.
+alert tcp $EXTERNAL_NET any -> $HOME_NET 80 (msg:"GOS LAB external HTTP access"; flags:S; flow:to_server,stateless; sid:1000001; rev:1;)

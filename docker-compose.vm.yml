@@ -16,6 +16,13 @@ services:
       # SSH к user снаружи VM.
       - "0.0.0.0:${USER_SSH_HOST_PORT}:22/tcp"
 
+  gos_arm_evil:
+    ports:
+      # RDP к evil снаружи Ubuntu VM.
+      - "0.0.0.0:${EVIL_RDP_HOST_PORT}:3389/tcp"
+      # SSH к evil снаружи Ubuntu VM.
+      - "0.0.0.0:${EVIL_SSH_HOST_PORT}:22/tcp"
+
   gos_web:
     ports:
       # HTTP к EspoCRM снаружи VM.

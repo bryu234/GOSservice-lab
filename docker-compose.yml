@@ -1,6 +1,7 @@
 # Основной compose-файл описывает лабораторную инфраструктуру с двумя сетями:
 # internal_net - внутренняя сеть рабочих станций и серверов;
-# external_net - внешняя сеть, куда выведен web-сервис.
+# external_net - внешняя сеть evil-машины.
+# Единственным проводником между ними является gos_router.
 # Публикация портов наружу вынесена в docker-compose.local.yml и docker-compose.vm.yml,
 # чтобы один и тот же стенд можно было безопасно запускать на MacBook и на Ubuntu VM.
 name: ${COMPOSE_PROJECT_NAME:-gosservice_lab}
@@ -28,6 +29,8 @@ services:
       LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
       GOS_DOMAIN: ${GOS_DOMAIN}
     depends_on:
+      gos_router:
+        condition: service_healthy
       # Ждем здоровый DNS, чтобы adm сразу мог резолвить внутренние имена.
       gos_dns:
         condition: service_healthy
@@ -78,6 +81,81 @@ services:
     dns:
       - ${GOS_DNS_IP}
 
+  # Двухинтерфейсный маршрутизатор между внешней и внутренней подсетями.
+  # SSH слушает только внутренний IP, а Suricata пассивно анализирует внешний интерфейс.
+  gos_router:
+    <<: *common_env_file
+    build:
+      context: ./services/gos_router
+    container_name: gos_router
+    hostname: gos_router
+    restart: unless-stopped
+    environment:
+      LOCALADMIN_USER: ${LOCALADMIN_USER}
+      LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
+      GOS_INTERNAL_SUBNET: ${GOS_INTERNAL_SUBNET}
+      GOS_EXTERNAL_SUBNET: ${GOS_EXTERNAL_SUBNET}
+      GOS_ROUTER_INTERNAL_IP: ${GOS_ROUTER_INTERNAL_IP}
+      GOS_ROUTER_EXTERNAL_IP: ${GOS_ROUTER_EXTERNAL_IP}
+      GOS_ARM_EVIL_IP: ${GOS_ARM_EVIL_IP}
+      GOS_WEB_INTERNAL_IP: ${GOS_WEB_INTERNAL_IP}
+      GOS_MAIL_IP: ${GOS_MAIL_IP}
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    volumes:
+      - suricata_logs:/var/log/suricata
+    networks:
+      internal_net:
+        ipv4_address: ${GOS_ROUTER_INTERNAL_IP}
+        aliases:
+          - router.${GOS_DOMAIN}
+      external_net:
+        ipv4_address: ${GOS_ROUTER_EXTERNAL_IP}
+    healthcheck:
+      test: ["CMD-SHELL", "test \"$$(cat /proc/sys/net/ipv4/ip_forward)\" = 1 && iptables -S FORWARD | grep -q -- '-P FORWARD DROP' && nc -z ${GOS_ROUTER_INTERNAL_IP} 22 && test -s /run/suricata/suricata.pid && kill -0 $$(cat /run/suricata/suricata.pid)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Внешняя рабочая станция для проверки доступа через gos_router.
+  gos_arm_evil:
+    <<: *common_env_file
+    build:
+      context: ./services/gos_arm_evil
+    container_name: gos_arm_evil
+    hostname: gos_arm_evil
+    restart: unless-stopped
+    shm_size: "1gb"
+    environment:
+      EVIL_USERNAME: ${EVIL_USERNAME}
+      EVIL_PASSWORD: ${EVIL_PASSWORD}
+      GOS_INTERNAL_SUBNET: ${GOS_INTERNAL_SUBNET}
+      GOS_ROUTER_EXTERNAL_IP: ${GOS_ROUTER_EXTERNAL_IP}
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      gos_router:
+        condition: service_healthy
+    networks:
+      external_net:
+        ipv4_address: ${GOS_ARM_EVIL_IP}
+    extra_hosts:
+      - "crm.${GOS_DOMAIN}:${GOS_WEB_INTERNAL_IP}"
+      - "mail.${GOS_DOMAIN}:${GOS_MAIL_IP}"
+      - "smtp.${GOS_DOMAIN}:${GOS_MAIL_IP}"
+      - "imap.${GOS_DOMAIN}:${GOS_MAIL_IP}"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 22 && nc -z 127.0.0.1 3389 && ip route get ${GOS_WEB_INTERNAL_IP} | grep -q 'via ${GOS_ROUTER_EXTERNAL_IP}'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
   # DNS-сервер лабораторной зоны gos.local.
   gos_dns:
     <<: *common_env_file
@@ -92,6 +170,7 @@ services:
       GOS_DNS_IP: ${GOS_DNS_IP}
       GOS_ARM_ADM_IP: ${GOS_ARM_ADM_IP}
       GOS_ARM_USER_IP: ${GOS_ARM_USER_IP}
+      GOS_ROUTER_INTERNAL_IP: ${GOS_ROUTER_INTERNAL_IP}
       GOS_WEB_INTERNAL_IP: ${GOS_WEB_INTERNAL_IP}
       GOS_DB_IP: ${GOS_DB_IP}
       GOS_MAIL_IP: ${GOS_MAIL_IP}
@@ -110,8 +189,8 @@ services:
     dns:
       - ${GOS_DNS_IP}
     healthcheck:
-      # Проверяем, что зона загружена и crm.gos.local резолвится в IP web-сервера.
-      test: ["CMD-SHELL", "dig @127.0.0.1 crm.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_INTERNAL_IP}'"]
+      # Проверяем, что зона содержит и CRM, и внутренний интерфейс роутера.
+      test: ["CMD-SHELL", "dig @127.0.0.1 crm.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_INTERNAL_IP}' && dig @127.0.0.1 router.${GOS_DOMAIN} +short | grep -q '${GOS_ROUTER_INTERNAL_IP}'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -133,10 +212,14 @@ services:
       MAIL_USER: ${MAIL_USER}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       GOS_DNS_IP: ${GOS_DNS_IP}
+      GOS_EXTERNAL_SUBNET: ${GOS_EXTERNAL_SUBNET}
+      GOS_ROUTER_INTERNAL_IP: ${GOS_ROUTER_INTERNAL_IP}
       # Админская учетная запись для SSH с adm-машины.
       LOCALADMIN_USER: ${LOCALADMIN_USER}
       LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
     depends_on:
+      gos_router:
+        condition: service_healthy
       gos_dns:
         condition: service_healthy
     volumes:
@@ -152,6 +235,8 @@ services:
           - imap.${GOS_DOMAIN}
     dns:
       - ${GOS_DNS_IP}
+    cap_add:
+      - NET_ADMIN
     healthcheck:
       # Проверяем SMTP, IMAP и submission-порт внутри контейнера.
       test: ["CMD-SHELL", "nc -z 127.0.0.1 25 && nc -z 127.0.0.1 143 && nc -z 127.0.0.1 587"]
@@ -349,8 +434,12 @@ services:
       # Админская учетная запись для SSH с adm-машины.
       LOCALADMIN_USER: ${LOCALADMIN_USER}
       LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
+      GOS_EXTERNAL_SUBNET: ${GOS_EXTERNAL_SUBNET}
+      GOS_ROUTER_INTERNAL_IP: ${GOS_ROUTER_INTERNAL_IP}
     depends_on:
       # Web стартует только после готовой БД и загруженной DNS-зоны.
+      gos_router:
+        condition: service_healthy
       gos_db:
         condition: service_healthy
       gos_dns:
@@ -369,17 +458,16 @@ services:
       retries: 20
       start_period: 60s
     networks:
-      # Внутренняя сеть нужна web-сервису для доступа к DNS и БД.
+      # Web находится только внутри; evil достигает его через gos_router.
       internal_net:
         ipv4_address: ${GOS_WEB_INTERNAL_IP}
         aliases:
           # Основное имя CRM.
           - crm.${GOS_DOMAIN}
-      # Внешняя сеть закрепляет отдельный внешний IP web-машины.
-      external_net:
-        ipv4_address: ${GOS_WEB_EXTERNAL_IP}
     dns:
       - ${GOS_DNS_IP}
+    cap_add:
+      - NET_ADMIN
 
   # База данных EspoCRM.
   gos_db:
@@ -447,7 +535,7 @@ services:
       - ${GOS_DNS_IP}
 
 networks:
-  # Внутренняя сеть: DNS, adm, user, DB и внутренний интерфейс web.
+  # Внутренняя сеть: рабочие станции, серверы и внутренний интерфейс роутера.
   internal_net:
     name: gos_internal_net
     driver: bridge
@@ -455,7 +543,7 @@ networks:
       config:
         - subnet: ${GOS_INTERNAL_SUBNET}
 
-  # Внешняя сеть: внешний интерфейс web-сервиса.
+  # Внешняя сеть: evil-машина и внешний интерфейс роутера.
   external_net:
     name: gos_external_net
     driver: bridge
@@ -472,6 +560,8 @@ volumes:
   espocrm_db:
   # Persistent volume почтового ящика.
   mail_home:
+  # Persistent volume событий Suricata на gos_router.
+  suricata_logs:
   # Runtime-generated TLS certificates for Wazuh.
   wazuh_certs:
   # Persistent volumes Wazuh Manager.

@@ -26,6 +26,7 @@ RUN apt-get update \
         unzip \
         mariadb-client \
         nano \
+        iproute2 \
         openssh-server \
         php8.3-cli \
         php8.3-fpm \

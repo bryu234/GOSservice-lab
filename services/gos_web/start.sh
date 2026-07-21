@@ -5,6 +5,8 @@ ESPO_DIR=/var/www/espocrm
 PHP_FPM_BIN=/usr/sbin/php-fpm8.3
 admin_user="${LOCALADMIN_USER:-localadmin}"
 admin_password="${LOCALADMIN_PASSWORD:-CHANGE_ME_LOCALADMIN_PASSWORD}"
+external_subnet="${GOS_EXTERNAL_SUBNET:-172.28.8.0/24}"
+router_internal_ip="${GOS_ROUTER_INTERNAL_IP:-10.10.20.254}"
 
 # Кодируем значения для передачи в install/cli.php через query-string.
 urlencode() {
@@ -137,6 +139,11 @@ install_espocrm_if_needed() {
 
 prepare_permissions
 setup_admin_ssh
+
+# Ответы внешней машине должны возвращаться тем же путем через gos_router,
+# а не через стандартный gateway Docker bridge.
+ip route replace "$external_subnet" via "$router_internal_ip"
+
 wait_for_database
 install_espocrm_if_needed
 

@@ -1,8 +1,38 @@
 # GOSservice Lab
 
+Лаборатория разделена на внутреннюю и внешнюю Docker-сети. Единственный
+маршрут между ними проходит через `gos_router`.
+
+```text
+gos_arm_evil (172.28.8.10)
+        |
+external_net (172.28.8.0/24)
+        |
+gos_router (172.28.8.254 / 10.10.20.254)
+        |
+internal_net (10.10.20.0/24)
+        +-- gos_arm_adm
+        +-- gos_web  (10.10.20.20)
+        +-- gos_mail (10.10.20.40)
+```
+
+Роутер разрешает внешней машине только следующие новые соединения:
+
+- HTTP к `crm.gos.local:80`;
+- SMTP к `mail.gos.local:25`;
+- IMAP к `mail.gos.local:143`;
+- SMTP submission к `mail.gos.local:587`.
+
+Остальной трафик из `external_net` во внутреннюю сеть блокируется. Suricata
+пассивно наблюдает внешний интерфейс и не блокирует трафик.
+
+## Запуск
+
+Ubuntu VM:
+
 ```bash
 cp .env.example .env
-# edit non-Wazuh passwords and ports if needed
+# измените демонстрационные пароли и при необходимости host-порты
 make up
 ```
 
@@ -10,17 +40,70 @@ macOS:
 
 ```bash
 cp .env.example .env
-# edit non-Wazuh passwords and ports if needed
+# измените демонстрационные пароли и при необходимости host-порты
 make up-local
 ```
 
-The three Wazuh passwords in `.env.example` satisfy the Wazuh complexity rules.
-The indexer and dashboard values match the bcrypt hashes in
-`services/gos_siem/config/wazuh_indexer/internal_users.yml`; the API value also
-matches `services/gos_siem/config/wazuh_dashboard/wazuh.yml`. When rotating
-these credentials, update the matching hash/config before recreating Wazuh.
+Перед запуском Makefile проверяет занятость всех опубликованных портов и
+пересечение `GOS_EXTERNAL_SUBNET` с существующими Docker-сетями. Проверки можно
+выполнить отдельно:
 
-Direct Compose startup remains available:
+```bash
+make check-ports
+make check-network
+```
+
+Если `.env` уже существовал до добавления роутера, перенесите в него новые
+`EVIL_*`, `GOS_ARM_EVIL_IP`, `GOS_ROUTER_INTERNAL_IP` и
+`GOS_ROUTER_EXTERNAL_IP` из `.env.example`, замените `GOS_EXTERNAL_SUBNET` на
+`172.28.8.0/24` и удалите устаревший `GOS_WEB_EXTERNAL_IP`. Команда `make env`
+не перезаписывает существующий файл и сохранит локальные пароли.
+
+Старая сеть `gos_external_net` могла остаться с диапазоном `10.10.30.0/24`.
+В этом случае `make check-network` остановит запуск. Остановите текущий Compose
+обычной командой `docker compose ... down` без `-v`, чтобы сохранить volumes,
+и затем повторите `make up` или `make up-local`: сеть будет создана заново уже
+как `172.28.8.0/24`.
+
+## Доступ
+
+Актуальные RDP/SSH-адреса печатает:
+
+```bash
+make rdp-info
+```
+
+Основные команды:
+
+```bash
+make ssh-adm
+make ssh-user
+make ssh-evil
+make ssh-router
+make shell-router
+make suricata-alerts
+```
+
+SSH роутера не публикуется на MacBook или Ubuntu VM. `make ssh-router`
+запускает SSH-клиент внутри `gos_arm_adm` и подключается к
+`admin@router.gos.local` (имя пользователя фактически берется из
+`LOCALADMIN_USER`).
+
+События Suricata хранятся в persistent volume `suricata_logs`:
+
+```bash
+make suricata-alerts
+docker compose --env-file .env -f docker-compose.yml \
+  exec gos_router tail -f /var/log/suricata/eve.json
+```
+
+## Wazuh
+
+Три Wazuh-пароля в `.env.example` соответствуют tracked-конфигурации и bcrypt
+hashes. При их смене нужно синхронно обновить настройки indexer и dashboard.
+Suricata в этой итерации хранит события локально и не отправляет их в Wazuh.
+
+Прямой Compose-запуск для Ubuntu VM остается доступен:
 
 ```bash
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.vm.yml up -d --build
