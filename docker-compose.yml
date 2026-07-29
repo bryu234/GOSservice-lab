@@ -108,6 +108,9 @@ services:
       net.ipv4.ip_forward: "1"
     volumes:
       - suricata_logs:/var/log/suricata
+      # Полный iptables ruleset переживает restart/down/up/recreate.
+      # Сброс выполняется только вместе с удалением volumes стенда.
+      - router_firewall_state:/var/lib/gos-router-firewall
     networks:
       internal_net:
         ipv4_address: ${GOS_ROUTER_INTERNAL_IP}
@@ -116,7 +119,9 @@ services:
       external_net:
         ipv4_address: ${GOS_ROUTER_EXTERNAL_IP}
     healthcheck:
-      test: ["CMD-SHELL", "test \"$$(cat /proc/sys/net/ipv4/ip_forward)\" = 1 && iptables -S FORWARD | grep -q -- '-P FORWARD DROP' && nc -z ${GOS_ROUTER_INTERNAL_IP} 22 && test -s /run/suricata/suricata.pid && kill -0 $$(cat /run/suricata/suricata.pid)"]
+      # Политики iptables студент может менять, поэтому healthcheck проверяет
+      # только работоспособность маршрутизатора и его сервисов.
+      test: ["CMD-SHELL", "test \"$$(cat /proc/sys/net/ipv4/ip_forward)\" = 1 && nc -z ${GOS_ROUTER_INTERNAL_IP} 22 && test -s /run/suricata/suricata.pid && kill -0 $$(cat /run/suricata/suricata.pid)"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -562,6 +567,8 @@ volumes:
   mail_home:
   # Persistent volume событий Suricata на gos_router.
   suricata_logs:
+  # Полный iptables ruleset, изменяемый студентом на gos_router.
+  router_firewall_state:
   # Runtime-generated TLS certificates for Wazuh.
   wazuh_certs:
   # Persistent volumes Wazuh Manager.

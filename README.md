@@ -97,6 +97,43 @@ docker compose --env-file .env -f docker-compose.yml \
   exec gos_router tail -f /var/log/suricata/eve.json
 ```
 
+## Учебные правила iptables на роутере
+
+Пользователь `LOCALADMIN_USER` имеет sudo-доступ и может менять полный IPv4
+ruleset обычными командами `iptables`. Например, чтобы запретить evil-машине
+SMTP submission:
+
+```bash
+ssh admin@router.gos.local
+sudo iptables -I FORWARD 1 \
+  -s 172.28.8.10 -d 10.10.20.40 -p tcp --dport 587 -j REJECT
+sudo iptables -L -n -v --line-numbers
+```
+
+Текущий ruleset автоматически сохраняется при корректной остановке роутера в
+volume `router_firewall_state`. Поэтому изменения переживают `restart`,
+`docker compose down/up` и пересоздание контейнера без удаления volumes:
+
+```bash
+make router-firewall
+make restart-router
+```
+
+Студент может правилами `INPUT` или `OUTPUT` заблокировать собственное
+SSH-подключение, а правилами `FORWARD` — нарушить маршрутизацию между сетями.
+Штатный сброс выполняется только вместе с полной очисткой данных стенда:
+
+```bash
+make clean-volumes
+make up
+```
+
+Для очистки также образов и оставшихся ресурсов используется
+`CONFIRM=1 make clean-all`. Проброшенные на host порты из
+`docker-compose.local.yml` и `docker-compose.vm.yml` не проходят через
+`gos_router`; его `iptables` управляет трафиком между `external_net` и
+`internal_net`.
+
 ## Wazuh
 
 Три Wazuh-пароля в `.env.example` соответствуют tracked-конфигурации и bcrypt
