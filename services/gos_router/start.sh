@@ -59,6 +59,9 @@ chmod 755 /run/sshd
 ssh-keygen -A >/dev/null 2>&1 || true
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || true
+# PAM-сессия в минимальном router-контейнере не нужна и мешает sshd создать
+# дочерний shell-процесс после успешной парольной аутентификации.
+sed -i 's/^#\?UsePAM.*/UsePAM no/' /etc/ssh/sshd_config || true
 sed -i '/^AllowUsers /d' /etc/ssh/sshd_config || true
 sed -i '/^ListenAddress /d' /etc/ssh/sshd_config || true
 echo "AllowUsers $admin_user" >>/etc/ssh/sshd_config
@@ -89,6 +92,12 @@ EOF
 mkdir -p /var/log/suricata /run/suricata
 chown -R root:root /var/log/suricata /run/suricata
 
+# Docker restart сохраняет writable layer контейнера, поэтому после аварийной
+# остановки здесь может остаться PID предыдущего процесса Suricata. В новом
+# PID namespace этот файл всегда устаревший и не должен блокировать запуск.
+suricata_pidfile="/run/suricata/suricata.pid"
+rm -f "$suricata_pidfile"
+
 echo "Router ready: $external_subnet ($external_interface) -> $internal_subnet ($internal_interface)."
 echo "Starting passive Suricata IDS on $external_interface."
 
@@ -99,4 +108,4 @@ exec suricata \
   -i "$external_interface" \
   -S /etc/suricata/rules/gos-local.rules \
   --set "vars.address-groups.HOME_NET=$internal_subnet" \
-  --pidfile /run/suricata/suricata.pid
+  --pidfile "$suricata_pidfile"

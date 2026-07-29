@@ -40,6 +40,10 @@ echo "AllowUsers $evil_user" >>/etc/ssh/sshd_config
 # Более специфичный маршрут не дает Docker gateway обойти gos_router.
 ip route replace "$internal_subnet" via "$router_external_ip"
 
+# Docker restart сохраняет runtime-файлы writable layer. Удаляем PID-файлы
+# завершившихся XRDP-процессов, чтобы evil-машина могла корректно перезапуститься.
+rm -f /run/xrdp/xrdp.pid /run/xrdp/xrdp-sesman.pid
+
 /usr/sbin/sshd
 /usr/sbin/xrdp-sesman
 exec /usr/sbin/xrdp --nodaemon

@@ -61,5 +61,6 @@ rsyslogd || true
 # Запускаем XRDP напрямую, без /usr/bin/entrypoint базового образа.
 # Базовый entrypoint пересоздает дефолтного пользователя ubuntu, поэтому
 # здесь намеренно запускаются только нужные RDP-процессы.
+rm -f /run/xrdp/xrdp.pid /run/xrdp/xrdp-sesman.pid
 /usr/sbin/xrdp-sesman
 exec /usr/sbin/xrdp --nodaemon
