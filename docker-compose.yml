@@ -150,7 +150,7 @@ services:
       external_net:
         ipv4_address: ${GOS_ARM_EVIL_IP}
     extra_hosts:
-      - "crm.${GOS_DOMAIN}:${GOS_WEB_INTERNAL_IP}"
+      - "site.${GOS_DOMAIN}:${GOS_WEB_INTERNAL_IP}"
       - "mail.${GOS_DOMAIN}:${GOS_MAIL_IP}"
       - "smtp.${GOS_DOMAIN}:${GOS_MAIL_IP}"
       - "imap.${GOS_DOMAIN}:${GOS_MAIL_IP}"
@@ -194,8 +194,8 @@ services:
     dns:
       - ${GOS_DNS_IP}
     healthcheck:
-      # Проверяем, что зона содержит и CRM, и внутренний интерфейс роутера.
-      test: ["CMD-SHELL", "dig @127.0.0.1 crm.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_INTERNAL_IP}' && dig @127.0.0.1 router.${GOS_DOMAIN} +short | grep -q '${GOS_ROUTER_INTERNAL_IP}'"]
+      # Проверяем, что зона содержит и учебный сайт, и внутренний интерфейс роутера.
+      test: ["CMD-SHELL", "dig @127.0.0.1 site.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_INTERNAL_IP}' && dig @127.0.0.1 router.${GOS_DOMAIN} +short | grep -q '${GOS_ROUTER_INTERNAL_IP}'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -412,8 +412,8 @@ services:
     dns:
       - ${GOS_DNS_IP}
 
-  # Web-машина из infra.pdf: Ubuntu + nginx + PHP-FPM + EspoCRM.
-  # Nginx здесь установлен явно, потому что одно из учебных заданий - обновление nginx.
+  # Учебный Web-сервер: nginx + PHP-FPM и скрытый CLI-инсталлятор EspoCRM.
+  # Пользователь видит только сайт из /var/www/html, а EspoCRM создает схему contact.
   gos_web:
     <<: *common_env_file
     build:
@@ -426,7 +426,8 @@ services:
     hostname: gos_web
     restart: unless-stopped
     environment:
-      # start.sh читает эти переменные и выполняет первичную CLI-установку EspoCRM.
+      # start.sh читает эти переменные для скрытой CLI-установки EspoCRM,
+      # а PHP-страницы сайта используют их для чтения contact.
       ESPOCRM_VERSION: ${ESPOCRM_VERSION}
       ESPOCRM_DATABASE_PLATFORM: Mysql
       ESPOCRM_DATABASE_HOST: gos_db
@@ -435,7 +436,7 @@ services:
       ESPOCRM_DATABASE_NAME: ${ESPOCRM_DB_NAME}
       ESPOCRM_ADMIN_USERNAME: ${ESPOCRM_ADMIN_USERNAME}
       ESPOCRM_ADMIN_PASSWORD: ${ESPOCRM_ADMIN_PASSWORD}
-      ESPOCRM_SITE_URL: http://crm.${GOS_DOMAIN}
+      ESPOCRM_SITE_URL: http://site.${GOS_DOMAIN}
       # Админская учетная запись для SSH с adm-машины.
       LOCALADMIN_USER: ${LOCALADMIN_USER}
       LOCALADMIN_PASSWORD: ${LOCALADMIN_PASSWORD}
@@ -450,25 +451,26 @@ services:
       gos_dns:
         condition: service_healthy
     volumes:
-      # Храним только изменяемые каталоги EspoCRM. Код приложения остается внутри образа,
-      # а data/config.php и пользовательские доработки переживают перезапуск контейнера.
+      # Скрытая EspoCRM сохраняет install-state, а отдельный volume хранит
+      # обновленный студентом nginx и его конфигурацию.
       - espocrm_data:/var/www/espocrm/data
       - espocrm_custom:/var/www/espocrm/custom
       - espocrm_client_custom:/var/www/espocrm/client/custom
+      - website_nginx:/opt/website-nginx
     healthcheck:
-      # Проверяем сам nginx/PHP endpoint внутри web-контейнера.
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ >/dev/null"]
+      # Auth-страницы намеренно меняют поведение во время задания, поэтому
+      # healthcheck проверяет статическую страницу и доступность MariaDB отдельно.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/index.html >/dev/null && mariadb-admin ping -h\"$$ESPOCRM_DATABASE_HOST\" -u\"$$ESPOCRM_DATABASE_USER\" -p\"$$ESPOCRM_DATABASE_PASSWORD\" --silent"]
       interval: 15s
       timeout: 5s
       retries: 20
       start_period: 60s
     networks:
-      # Web находится только внутри; evil достигает его через gos_router.
+      # Web находится внутри; evil достигает его через gos_router.
       internal_net:
         ipv4_address: ${GOS_WEB_INTERNAL_IP}
         aliases:
-          # Основное имя CRM.
-          - crm.${GOS_DOMAIN}
+          - site.${GOS_DOMAIN}
     dns:
       - ${GOS_DNS_IP}
     cap_add:
@@ -561,6 +563,8 @@ volumes:
   espocrm_data:
   espocrm_custom:
   espocrm_client_custom:
+  # Nginx binary/config учебного сайта, изменяемые студентом.
+  website_nginx:
   # Persistent volume MariaDB.
   espocrm_db:
   # Persistent volume почтового ящика.

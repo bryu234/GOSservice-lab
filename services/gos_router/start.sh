@@ -39,7 +39,7 @@ if [ -z "$internal_interface" ] || [ -z "$external_interface" ]; then
 fi
 
 apply_default_firewall() {
-  # Межсетевой экран по умолчанию пропускает только CRM и почтовые протоколы
+  # Межсетевой экран по умолчанию пропускает только учебный сайт и почтовые протоколы
   # от evil-машины. SSH завершается на самом роутере и не попадает в FORWARD.
   iptables-restore <<EOF
 *filter

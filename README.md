@@ -18,7 +18,7 @@ internal_net (10.10.20.0/24)
 
 Роутер разрешает внешней машине только следующие новые соединения:
 
-- HTTP к `crm.gos.local:80`;
+- HTTP к `site.gos.local:80`;
 - SMTP к `mail.gos.local:25`;
 - IMAP к `mail.gos.local:143`;
 - SMTP submission к `mail.gos.local:587`.
@@ -53,7 +53,9 @@ make check-ports
 make check-network
 ```
 
-Если `.env` уже существовал до добавления роутера, перенесите в него новые
+Если `.env` уже существовал до добавления учебного сайта, замените
+`ESPOCRM_HTTP_HOST_PORT` на `WEBSITE_HTTP_HOST_PORT=8088`. Для более старых
+конфигураций также перенесите новые
 `EVIL_*`, `GOS_ARM_EVIL_IP`, `GOS_ROUTER_INTERNAL_IP` и
 `GOS_ROUTER_EXTERNAL_IP` из `.env.example`, замените `GOS_EXTERNAL_SUBNET` на
 `172.28.8.0/24` и удалите устаревший `GOS_WEB_EXTERNAL_IP`. Команда `make env`
@@ -80,7 +82,9 @@ make ssh-adm
 make ssh-user
 make ssh-evil
 make ssh-router
+make ssh-web
 make shell-router
+make shell-web
 make suricata-alerts
 ```
 
@@ -96,6 +100,44 @@ make suricata-alerts
 docker compose --env-file .env -f docker-compose.yml \
   exec gos_router tail -f /var/log/suricata/eve.json
 ```
+
+## Учебный сайт nginx
+
+`gos_web` открывает учебный сайт по `http://site.gos.local` внутри стенда и
+через роутер с evil-машины. С host сайт доступен на
+`http://127.0.0.1:${WEBSITE_HTTP_HOST_PORT}` после `make up-local` или на
+`http://<VM_IP>:${WEBSITE_HTTP_HOST_PORT}` после `make up`.
+
+EspoCRM 10.0.1 не публикуется как отдельный интерфейс: ее CLI-инсталлятор
+внутри `gos_web` создает полную схему БД, после чего `gos_db_seed` заполняет
+таблицу `contact` 51 тестовой записью. Nginx обслуживает только файлы из
+`/var/www/html`.
+
+Исходный учебный сценарий намеренно содержит разные проверки пароля:
+
+- форма отправляет `admin / xxXX1234!` на `/users.php`;
+- `users.php` ожидает `admin / admin`;
+- `users_pass.php` ожидает `admin / xxXX1234!`.
+
+Студент подключается по SSH с adm-машины (`make ssh-web`) и добавляет в
+`/etc/nginx/nginx.conf`:
+
+```nginx
+location = /users.php {
+    rewrite ^ /users_pass.php last;
+}
+```
+
+После проверки конфигурации ее можно применить:
+
+```bash
+sudo nginx -t
+sudo nginx -s reload
+```
+
+Binary и конфигурация nginx хранятся в volume `website_nginx`, поэтому
+обновление и rewrite переживают restart/down/up. Полная очистка volumes
+возвращает nginx 1.30.0 и исходный конфиг без rewrite.
 
 ## Учебные правила iptables на роутере
 
