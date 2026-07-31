@@ -18,10 +18,11 @@ serial="$(date +%Y%m%d%H)"
 # - разрешаем запросы из docker-сетей;
 # - включаем рекурсию для внешних доменов;
 # - пересылаем внешние запросы на публичные DNS;
-# - проверка подписей намеренно не настроена для учебной правки.
+# - DNSSEC-валидация явно отключена для учебного стенда.
 cat >/etc/bind/named.conf.options <<EOF
 options {
   directory "/var/cache/bind";
+  dnssec-validation no;
   listen-on port 53 { any; };
   listen-on-v6 { none; };
   allow-query { any; };
