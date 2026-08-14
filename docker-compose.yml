@@ -98,6 +98,7 @@ services:
       GOS_ROUTER_INTERNAL_IP: ${GOS_ROUTER_INTERNAL_IP}
       GOS_ROUTER_EXTERNAL_IP: ${GOS_ROUTER_EXTERNAL_IP}
       GOS_ARM_EVIL_IP: ${GOS_ARM_EVIL_IP}
+      GOS_DNS_IP: ${GOS_DNS_IP}
       GOS_WEB_INTERNAL_IP: ${GOS_WEB_INTERNAL_IP}
       GOS_MAIL_IP: ${GOS_MAIL_IP}
     cap_add:
@@ -150,6 +151,7 @@ services:
       external_net:
         ipv4_address: ${GOS_ARM_EVIL_IP}
     extra_hosts:
+      - "dns.${GOS_DOMAIN}:${GOS_DNS_IP}"
       - "site.${GOS_DOMAIN}:${GOS_WEB_INTERNAL_IP}"
       - "mail.${GOS_DOMAIN}:${GOS_MAIL_IP}"
       - "smtp.${GOS_DOMAIN}:${GOS_MAIL_IP}"
@@ -172,6 +174,7 @@ services:
     environment:
       # Эти IP используются start.sh для генерации зоны gos.local.
       GOS_DOMAIN: ${GOS_DOMAIN}
+      GOS_EXTERNAL_SUBNET: ${GOS_EXTERNAL_SUBNET}
       GOS_DNS_IP: ${GOS_DNS_IP}
       GOS_ARM_ADM_IP: ${GOS_ARM_ADM_IP}
       GOS_ARM_USER_IP: ${GOS_ARM_USER_IP}
@@ -193,6 +196,9 @@ services:
           - dns.${GOS_DOMAIN}
     dns:
       - ${GOS_DNS_IP}
+    cap_add:
+      # Нужен только для обратного маршрута к external_net через gos_router.
+      - NET_ADMIN
     healthcheck:
       # Проверяем, что зона содержит и учебный сайт, и внутренний интерфейс роутера.
       test: ["CMD-SHELL", "dig @127.0.0.1 site.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_INTERNAL_IP}' && dig @127.0.0.1 router.${GOS_DOMAIN} +short | grep -q '${GOS_ROUTER_INTERNAL_IP}'"]

@@ -8,6 +8,7 @@ external_subnet="${GOS_EXTERNAL_SUBNET:?GOS_EXTERNAL_SUBNET is required}"
 router_internal_ip="${GOS_ROUTER_INTERNAL_IP:?GOS_ROUTER_INTERNAL_IP is required}"
 router_external_ip="${GOS_ROUTER_EXTERNAL_IP:?GOS_ROUTER_EXTERNAL_IP is required}"
 evil_ip="${GOS_ARM_EVIL_IP:?GOS_ARM_EVIL_IP is required}"
+dns_ip="${GOS_DNS_IP:?GOS_DNS_IP is required}"
 web_ip="${GOS_WEB_INTERNAL_IP:?GOS_WEB_INTERNAL_IP is required}"
 mail_ip="${GOS_MAIL_IP:?GOS_MAIL_IP is required}"
 firewall_state_dir="/var/lib/gos-router-firewall"
@@ -39,7 +40,7 @@ if [ -z "$internal_interface" ] || [ -z "$external_interface" ]; then
 fi
 
 apply_default_firewall() {
-  # Межсетевой экран по умолчанию пропускает только учебный сайт и почтовые протоколы
+  # Межсетевой экран по умолчанию пропускает DNS, учебный сайт и почтовые протоколы
   # от evil-машины. SSH завершается на самом роутере и не попадает в FORWARD.
   iptables-restore <<EOF
 *filter
@@ -47,6 +48,8 @@ apply_default_firewall() {
 :FORWARD DROP [0:0]
 :OUTPUT ACCEPT [0:0]
 -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+-A FORWARD -i $external_interface -o $internal_interface -s $evil_ip/32 -d $dns_ip/32 -p tcp --dport 53 -m conntrack --ctstate NEW -j ACCEPT
+-A FORWARD -i $external_interface -o $internal_interface -s $evil_ip/32 -d $dns_ip/32 -p udp --dport 53 -m conntrack --ctstate NEW -j ACCEPT
 -A FORWARD -i $external_interface -o $internal_interface -s $evil_ip/32 -d $web_ip/32 -p tcp --dport 80 -m conntrack --ctstate NEW -j ACCEPT
 -A FORWARD -i $external_interface -o $internal_interface -s $evil_ip/32 -d $mail_ip/32 -p tcp -m multiport --dports 25,143,587 -m conntrack --ctstate NEW -j ACCEPT
 COMMIT

@@ -8,6 +8,8 @@ set -euo pipefail
 domain="${GOS_DOMAIN:-gos.local}"
 admin_user="${LOCALADMIN_USER:-localadmin}"
 admin_password="${LOCALADMIN_PASSWORD:-CHANGE_ME_LOCALADMIN_PASSWORD}"
+external_subnet="${GOS_EXTERNAL_SUBNET:?GOS_EXTERNAL_SUBNET is required}"
+router_internal_ip="${GOS_ROUTER_INTERNAL_IP:?GOS_ROUTER_INTERNAL_IP is required}"
 
 # Serial зоны строится из текущей даты/часа. Этого достаточно для лабораторной,
 # где зона генерируется заново при старте контейнера.
@@ -116,6 +118,10 @@ chmod 755 /run/sshd
 ssh-keygen -A >/dev/null 2>&1 || true
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || true
+
+# Ответы evil-машине должны возвращаться через gos_router, чтобы DNS-трафик
+# проходил через управляемые студентом правила FORWARD в обоих направлениях.
+ip route replace "$external_subnet" via "$router_internal_ip"
 
 # rsyslog и sshd запускаются как вспомогательные сервисы.
 # named запускается в foreground, чтобы контейнер жил пока жив DNS-сервер.

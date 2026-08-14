@@ -12,6 +12,7 @@ gos_router (172.28.8.254 / 10.10.20.254)
         |
 internal_net (10.10.20.0/24)
         +-- gos_arm_adm
+        +-- gos_dns  (10.10.20.53)
         +-- gos_web  (10.10.20.20)
         +-- gos_mail (10.10.20.40)
 ```
@@ -19,6 +20,7 @@ internal_net (10.10.20.0/24)
 Роутер разрешает внешней машине только следующие новые соединения:
 
 - HTTP к `site.gos.local:80`;
+- DNS к `dns.gos.local:53` по TCP и UDP;
 - SMTP к `mail.gos.local:25`;
 - IMAP к `mail.gos.local:143`;
 - SMTP submission к `mail.gos.local:587`.
@@ -150,6 +152,24 @@ ssh admin@router.gos.local
 sudo iptables -I FORWARD 1 \
   -s 172.28.8.10 -d 10.10.20.40 -p tcp --dport 587 -j REJECT
 sudo iptables -L -n -v --line-numbers
+```
+
+DNS с evil-машины изначально доступен по TCP и UDP. Проверить его можно так:
+
+```bash
+nmap -sT -p 53 dns.gos.local
+sudo nmap -sU -p 53 dns.gos.local
+dig @dns.gos.local site.gos.local +short
+```
+
+Чтобы закрыть DNS на роутере, студент блокирует оба протокола в `FORWARD`:
+
+```bash
+sudo iptables -I FORWARD 1 \
+  -s 172.28.8.10 -d 10.10.20.53 -p tcp --dport 53 -j REJECT
+sudo iptables -I FORWARD 1 \
+  -s 172.28.8.10 -d 10.10.20.53 -p udp --dport 53 -j REJECT
+sudo iptables -L FORWARD -n -v --line-numbers
 ```
 
 Текущий ruleset автоматически сохраняется при корректной остановке роутера в
