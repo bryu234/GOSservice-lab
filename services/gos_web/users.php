@@ -1,12 +1,5 @@
 <?php
 
-$login    = $_GET['login'] ?? '';
-$password = $_GET['password'] ?? '';
-
-if ($login !== 'admin' || $password !== 'admin') {
-    http_response_code(403);
-    exit('403 Forbidden');
-}
 # отредактировать креды и контейнер для подключения к БД ниже
 $mysqli = new mysqli(
     getenv('ESPOCRM_DATABASE_HOST'),
