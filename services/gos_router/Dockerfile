@@ -13,6 +13,7 @@ RUN apt-get update && \
       netcat-openbsd \
       openssh-server \
       procps \
+      rsyslog \
       sudo \
       suricata && \
     rm -rf /var/lib/apt/lists/*

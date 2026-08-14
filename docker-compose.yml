@@ -44,6 +44,9 @@ services:
     dns:
       # Принудительно используем наш лабораторный DNS.
       - ${GOS_DNS_IP}
+    volumes:
+      # Конфигурация rsyslog, изменяемая студентом, переживает пересоздание контейнера.
+      - arm_adm_rsyslog_config:/etc/rsyslog.d
 
   # Пользовательская рабочая станция.
   # Отдельный образ: GUI по RDP, SSH-доступ по паролю и почтовый клиент.
@@ -80,6 +83,9 @@ services:
         ipv4_address: ${GOS_ARM_USER_IP}
     dns:
       - ${GOS_DNS_IP}
+    volumes:
+      # Конфигурация rsyslog, изменяемая студентом, переживает пересоздание контейнера.
+      - arm_user_rsyslog_config:/etc/rsyslog.d
 
   # Двухинтерфейсный маршрутизатор между внешней и внутренней подсетями.
   # SSH слушает только внутренний IP, а Suricata пассивно анализирует внешний интерфейс.
@@ -199,6 +205,9 @@ services:
     cap_add:
       # Нужен только для обратного маршрута к external_net через gos_router.
       - NET_ADMIN
+    volumes:
+      # Bind-конфигурация создается один раз и затем остается под управлением студента.
+      - dns_bind_config:/etc/bind
     healthcheck:
       # Проверяем, что зона содержит и учебный сайт, и внутренний интерфейс роутера.
       test: ["CMD-SHELL", "dig @127.0.0.1 site.${GOS_DOMAIN} +short | grep -q '${GOS_WEB_INTERNAL_IP}' && dig @127.0.0.1 router.${GOS_DOMAIN} +short | grep -q '${GOS_ROUTER_INTERNAL_IP}'"]
@@ -236,6 +245,10 @@ services:
     volumes:
       # Домашний каталог пользователя содержит Maildir с письмами.
       - mail_home:/home
+      # Конфигурации почтовых сервисов и rsyslog сохраняют изменения студента.
+      - mail_postfix_config:/etc/postfix
+      - mail_dovecot_config:/etc/dovecot
+      - mail_rsyslog_config:/etc/rsyslog.d
     networks:
       # Почтовый сервер доступен только из внутренней лабораторной сети.
       internal_net:
@@ -565,6 +578,15 @@ networks:
         - subnet: ${GOS_EXTERNAL_SUBNET}
 
 volumes:
+  # Persistent rsyslog configuration on the two workstations.
+  arm_adm_rsyslog_config:
+  arm_user_rsyslog_config:
+  # Bind configuration changed by the student.
+  dns_bind_config:
+  # Postfix, Dovecot and mail rsyslog configuration changed by the student.
+  mail_postfix_config:
+  mail_dovecot_config:
+  mail_rsyslog_config:
   # Persistent volumes EspoCRM.
   espocrm_data:
   espocrm_custom:

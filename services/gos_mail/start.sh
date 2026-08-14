@@ -1,10 +1,7 @@
 #!/bin/bash
 # Скрипт запуска почтового сервера.
-# На каждом старте:
-# - создает системного пользователя для mailbox;
-# - обновляет пароль из .env;
-# - генерирует минимальные конфиги Postfix и Dovecot;
-# - запускает SMTP и IMAP сервисы.
+# На первом старте чистого volume создает конфиги Postfix и Dovecot.
+# На последующих стартах сохраняет изменения студента и запускает сервисы.
 set -euo pipefail
 
 # Почтовые параметры приходят из .env. Значения по умолчанию нужны
@@ -34,31 +31,32 @@ for dir in "$mail_home/Maildir" "$mail_home/Maildir/cur" "$mail_home/Maildir/new
   install -d -m 700 -o "$mail_user" -g "$mail_user" "$dir"
 done
 
-# Настраиваем Postfix как внутренний SMTP-сервер лабораторного домена.
-# mynetworks намеренно открыт на весь IPv4 для учебной misconfiguration.
-postconf -e "myhostname = ${mail_hostname}"
-postconf -e "mydomain = ${mail_domain}"
-postconf -e "myorigin = \$mydomain"
-postconf -e "inet_interfaces = all"
-postconf -e "inet_protocols = ipv4"
-postconf -e "mydestination = \$myhostname, localhost.\$mydomain, localhost, \$mydomain"
-postconf -e "home_mailbox = Maildir/"
-postconf -e "mynetworks = 0.0.0.0/0"
-postconf -e "smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, defer_unauth_destination"
-postconf -e "smtpd_sasl_type = dovecot"
-postconf -e "smtpd_sasl_path = private/auth"
-postconf -e "smtpd_sasl_auth_enable = yes"
-postconf -e "smtpd_tls_security_level = none"
-postconf -e "smtp_tls_security_level = none"
+mail_config_marker="/etc/postfix/.gos-initialized"
 
-# Включаем порт 587 для Thunderbird. Он требует авторизацию через Dovecot SASL.
-postconf -M submission/inet="submission inet n - y - - smtpd"
-postconf -P submission/inet/syslog_name=postfix/submission
-postconf -P submission/inet/smtpd_sasl_auth_enable=yes
-postconf -P submission/inet/smtpd_relay_restrictions=permit_sasl_authenticated,reject
+# Начальные уязвимые настройки создаются один раз. После marker-файла
+# /etc/postfix и /etc/dovecot полностью остаются под управлением студента.
+if [[ ! -e "$mail_config_marker" ]]; then
+  postconf -e "myhostname = ${mail_hostname}"
+  postconf -e "mydomain = ${mail_domain}"
+  postconf -e "myorigin = \$mydomain"
+  postconf -e "inet_interfaces = all"
+  postconf -e "inet_protocols = ipv4"
+  postconf -e "mydestination = \$myhostname, localhost.\$mydomain, localhost, \$mydomain"
+  postconf -e "home_mailbox = Maildir/"
+  postconf -e "mynetworks = 0.0.0.0/0"
+  postconf -e "smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, defer_unauth_destination"
+  postconf -e "smtpd_sasl_type = dovecot"
+  postconf -e "smtpd_sasl_path = private/auth"
+  postconf -e "smtpd_sasl_auth_enable = yes"
+  postconf -e "smtpd_tls_security_level = none"
+  postconf -e "smtp_tls_security_level = none"
 
-# Dovecot отдает Maildir по IMAP и предоставляет Postfix unix-socket для SASL.
-cat >/etc/dovecot/local.conf <<EOF
+  postconf -M submission/inet="submission inet n - y - - smtpd"
+  postconf -P submission/inet/syslog_name=postfix/submission
+  postconf -P submission/inet/smtpd_sasl_auth_enable=yes
+  postconf -P submission/inet/smtpd_relay_restrictions=permit_sasl_authenticated,reject
+
+  cat >/etc/dovecot/local.conf <<EOF
 protocols = imap lmtp
 listen = *
 disable_plaintext_auth = no
@@ -82,13 +80,14 @@ service auth {
 ssl = no
 EOF
 
-# Проверяем конфигурации до запуска демонов.
+  postfix check
+  dovecot -n >/dev/null
+  touch "$mail_config_marker"
+fi
+
+# Проверяем в том числе сохраненные изменения студента до запуска демонов.
 postfix check
 dovecot -n >/dev/null
-
-# Логирование почты в /var/log/mail.log намеренно отключено.
-# Если файл создали вручную во время диагностики, удаляем его при старте.
-rm -f /var/log/mail.log
 
 # Локальный администратор нужен для SSH-доступа с adm-машины.
 if ! id "$admin_user" >/dev/null 2>&1; then
@@ -113,6 +112,17 @@ sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || tru
 # Симметричный обратный маршрут гарантирует, что ответы evil-машине проходят
 # через gos_router и наблюдаются Suricata.
 ip route replace "$external_subnet" via "$router_internal_ip"
+
+# Rsyslog установлен, но остается выключенным, пока студент не создаст задание
+# /etc/rsyslog.d/30-postfix.conf. После этого он включается и на будущих стартах.
+if [[ -f /etc/rsyslog.d/30-postfix.conf ]]; then
+  rm -f /run/rsyslogd.pid
+  if rsyslogd -N1; then
+    rsyslogd
+  else
+    echo "Invalid /etc/rsyslog.d/30-postfix.conf; rsyslog was not started." >&2
+  fi
+fi
 
 # Postfix и sshd запускаем как сервисы в фоне, Dovecot держит контейнер в foreground.
 postfix start

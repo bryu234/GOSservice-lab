@@ -61,8 +61,10 @@ sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || tru
 sed -i '/^AllowUsers /d' /etc/ssh/sshd_config || true
 echo "AllowUsers $user_name $admin_user" >>/etc/ssh/sshd_config
 
-# Запускаем SSHD. В отличие от adm-машины, sudo и инструменты анализа трафика
-# здесь не настраиваются, потому что это обычная пользовательская станция.
+# Запускаем локальный системный аудит и SSHD. Ошибка чтения /proc/kmsg внутри
+# контейнера не должна мешать запуску пользовательской станции.
+rm -f /run/rsyslogd.pid
+rsyslogd || true
 /usr/sbin/sshd
 
 # Создаем готовый профиль Thunderbird с настроенным почтовым аккаунтом.

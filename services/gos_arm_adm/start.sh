@@ -55,6 +55,7 @@ echo "AllowUsers $admin_user" >>/etc/ssh/sshd_config
 
 # Запускаем системные логи и SSH. rsyslog может ругаться на /proc/kmsg
 # внутри контейнера, поэтому ошибка не должна валить весь контейнер.
+rm -f /run/rsyslogd.pid
 rsyslogd || true
 /usr/sbin/sshd
 

@@ -27,6 +27,7 @@ RUN apt-get update && \
       git \
       locales \
       openssh-server \
+      rsyslog \
       software-properties-common \
       sudo \
       vim \

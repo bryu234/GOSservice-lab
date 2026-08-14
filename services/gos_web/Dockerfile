@@ -41,6 +41,7 @@ RUN apt-get update \
         php8.3-xml \
         php8.3-zip \
         php8.3-bcmath \
+        rsyslog \
         sudo \
     && rm -rf /var/lib/apt/lists/*
 

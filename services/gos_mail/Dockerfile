@@ -7,8 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # - postfix принимает и доставляет SMTP-почту;
 # - dovecot отдает почтовый ящик по IMAP;
 # - openssh-server/sudo/nano нужны для администрирования с adm-машины;
-# - netcat-openbsd используется healthcheck'ом compose.
-# Логирование почты в /var/log/mail.log намеренно не включаем для лабораторной.
+# - netcat-openbsd используется healthcheck'ом compose;
+# - rsyslog установлен, но логирование Postfix включает студент.
 RUN set -eux; \
     echo "postfix postfix/mailname string gos.local" | debconf-set-selections; \
     echo "postfix postfix/main_mailer_type select Internet Site" | debconf-set-selections; \
@@ -24,10 +24,11 @@ RUN set -eux; \
       openssh-server \
       postfix \
       procps \
+      rsyslog \
       sudo; \
     rm -rf /var/lib/apt/lists/*
 
-# Скрипт на каждом старте генерирует конфиги из .env и создает mailbox.
+# Скрипт создает начальные конфиги один раз и затем сохраняет изменения студента.
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 

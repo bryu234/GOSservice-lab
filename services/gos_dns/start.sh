@@ -1,7 +1,6 @@
 #!/bin/bash
 # Скрипт запуска DNS-машины.
-# На каждом старте генерирует конфиги Bind9 из переменных окружения,
-# чтобы IP-адреса можно было менять через .env без ручного редактирования зоны.
+# Конфиги Bind9 создаются только при первом старте чистого persistent volume.
 set -euo pipefail
 
 # Домен лабораторной по умолчанию - gos.local.
@@ -11,17 +10,14 @@ admin_password="${LOCALADMIN_PASSWORD:-CHANGE_ME_LOCALADMIN_PASSWORD}"
 external_subnet="${GOS_EXTERNAL_SUBNET:?GOS_EXTERNAL_SUBNET is required}"
 router_internal_ip="${GOS_ROUTER_INTERNAL_IP:?GOS_ROUTER_INTERNAL_IP is required}"
 
-# Serial зоны строится из текущей даты/часа. Этого достаточно для лабораторной,
-# где зона генерируется заново при старте контейнера.
-serial="$(date +%Y%m%d%H)"
+bind_marker="/etc/bind/.gos-initialized"
 
-# Основные настройки Bind9:
-# - слушаем все интерфейсы контейнера;
-# - разрешаем запросы из docker-сетей;
-# - включаем рекурсию для внешних доменов;
-# - пересылаем внешние запросы на публичные DNS;
-# - DNSSEC-валидация явно отключена для учебного стенда.
-cat >/etc/bind/named.conf.options <<EOF
+# Первый запуск наполняет конфигурационный volume из переменных стенда. После
+# создания marker-файла все изменения в /etc/bind принадлежат студенту.
+if [[ ! -e "$bind_marker" ]]; then
+  serial="$(date +%Y%m%d%H)"
+
+  cat >/etc/bind/named.conf.options <<EOF
 options {
   directory "/var/cache/bind";
   dnssec-validation no;
@@ -35,41 +31,39 @@ options {
   };
 };
 
-// logging {
-//   channel named_log {
-//     file "/var/log/bind/named.log" versions 3 size 5m;
-//     severity info;
-//     print-time yes;
-//     print-category yes;
-//     print-severity yes;
-//   };
-//
-//   channel query_log {
-//     file "/var/log/bind/query.log" versions 3 size 5m;
-//     severity info;
-//     print-time yes;
-//     print-category yes;
-//     print-severity yes;
-//   };
-//
-//   category default { named_log; };
-//   category security { named_log; };
-//   category queries { query_log; };
-// };
+/*
+logging {
+  channel named_log {
+    file "/var/log/bind/named.log" versions 3 size 5m;
+    severity info;
+    print-time yes;
+    print-category yes;
+    print-severity yes;
+  };
+
+  channel query_log {
+    file "/var/log/bind/query.log" versions 3 size 5m;
+    severity info;
+    print-time yes;
+    print-category yes;
+    print-severity yes;
+  };
+
+  category default { named_log; };
+  category security { named_log; };
+  category queries { query_log; };
+};
+*/
 EOF
 
-# Подключаем master-зону лабораторного домена.
-cat >/etc/bind/named.conf.local <<EOF
+  cat >/etc/bind/named.conf.local <<EOF
 zone "$domain" {
   type master;
   file "/etc/bind/db.$domain";
 };
 EOF
 
-# Генерируем прямую DNS-зону.
-# В именах используются дефисы, потому что underscore в DNS owner names
-# rejected by Bind check-names и ломает загрузку зоны.
-cat >/etc/bind/db.$domain <<EOF
+  cat >/etc/bind/db.$domain <<EOF
 \$ORIGIN $domain.
 \$TTL 300
 @ IN SOA dns.$domain. admin.$domain. (
@@ -95,9 +89,20 @@ wazuh-indexer  IN A  ${GOS_WAZUH_INDEXER_IP}
 siem           IN A  ${GOS_WAZUH_DASHBOARD_IP}
 EOF
 
-# Проверяем синтаксис Bind-конфигов до запуска named.
+  named-checkconf
+  named-checkzone "$domain" "/etc/bind/db.$domain"
+  touch "$bind_marker"
+fi
+
+# Каталог журналов не является volume, поэтому восстанавливаем его при каждом
+# пересоздании контейнера. Сам logging-блок студент включает в /etc/bind.
+install -d -m 0750 -o bind -g bind /var/log/bind
+
+# Ошибочная правка не должна запускать named с поврежденной конфигурацией.
 named-checkconf
-named-checkzone "$domain" "/etc/bind/db.$domain"
+if [[ -f "/etc/bind/db.$domain" ]]; then
+  named-checkzone "$domain" "/etc/bind/db.$domain"
+fi
 
 # Локальный администратор нужен для SSH-доступа с adm-машины.
 if ! id "$admin_user" >/dev/null 2>&1; then
@@ -123,8 +128,7 @@ sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || tru
 # проходил через управляемые студентом правила FORWARD в обоих направлениях.
 ip route replace "$external_subnet" via "$router_internal_ip"
 
-# rsyslog и sshd запускаются как вспомогательные сервисы.
+# На DNS rsyslog установлен, но намеренно не включен автоматически.
 # named запускается в foreground, чтобы контейнер жил пока жив DNS-сервер.
-rsyslogd || true
 /usr/sbin/sshd
 exec named -g -u bind
