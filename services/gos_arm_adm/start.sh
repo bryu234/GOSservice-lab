@@ -53,10 +53,9 @@ sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || tru
 sed -i '/^AllowUsers /d' /etc/ssh/sshd_config || true
 echo "AllowUsers $admin_user" >>/etc/ssh/sshd_config
 
-# Запускаем системные логи и SSH. rsyslog может ругаться на /proc/kmsg
-# внутри контейнера, поэтому ошибка не должна валить весь контейнер.
-rm -f /run/rsyslogd.pid
-rsyslogd || true
+# На adm правила локального аудита включены изначально и сохраняются в volume.
+bash /usr/local/bin/gos-rsyslog.sh initialize enabled
+bash /usr/local/bin/gos-rsyslog.sh start required
 /usr/sbin/sshd
 
 # Запускаем XRDP напрямую, без /usr/bin/entrypoint базового образа.

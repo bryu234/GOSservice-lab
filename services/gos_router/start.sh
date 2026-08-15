@@ -226,6 +226,10 @@ sed -i '/^AllowUsers /d' /etc/ssh/sshd_config || true
 sed -i '/^ListenAddress /d' /etc/ssh/sshd_config || true
 echo "AllowUsers $admin_user" >>/etc/ssh/sshd_config
 echo "ListenAddress $router_internal_ip" >>/etc/ssh/sshd_config
+
+# На роутере конфигурация подготовлена, но студент включает ее самостоятельно.
+bash /usr/local/bin/gos-rsyslog.sh initialize disabled
+bash /usr/local/bin/gos-rsyslog.sh start optional
 /usr/sbin/sshd
 
 # Маршрутизация включается compose-параметром sysctls. Повторная запись в

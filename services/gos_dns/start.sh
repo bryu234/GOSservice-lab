@@ -128,7 +128,10 @@ sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || tru
 # проходил через управляемые студентом правила FORWARD в обоих направлениях.
 ip route replace "$external_subnet" via "$router_internal_ip"
 
-# На DNS rsyslog установлен, но намеренно не включен автоматически.
+# На DNS правила локального аудита подготовлены, но изначально выключены.
+bash /usr/local/bin/gos-rsyslog.sh initialize disabled
+bash /usr/local/bin/gos-rsyslog.sh start optional
+
 # named запускается в foreground, чтобы контейнер жил пока жив DNS-сервер.
 /usr/sbin/sshd
 exec named -g -u bind

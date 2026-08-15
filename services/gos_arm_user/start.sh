@@ -61,10 +61,9 @@ sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || tru
 sed -i '/^AllowUsers /d' /etc/ssh/sshd_config || true
 echo "AllowUsers $user_name $admin_user" >>/etc/ssh/sshd_config
 
-# Запускаем локальный системный аудит и SSHD. Ошибка чтения /proc/kmsg внутри
-# контейнера не должна мешать запуску пользовательской станции.
-rm -f /run/rsyslogd.pid
-rsyslogd || true
+# На user правила локального аудита включены изначально и сохраняются в volume.
+bash /usr/local/bin/gos-rsyslog.sh initialize enabled
+bash /usr/local/bin/gos-rsyslog.sh start required
 /usr/sbin/sshd
 
 # Создаем готовый профиль Thunderbird с настроенным почтовым аккаунтом.

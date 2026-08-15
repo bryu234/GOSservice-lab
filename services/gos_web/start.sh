@@ -148,6 +148,9 @@ install_espocrm_if_needed
 
 # SSHD запускаем здесь, а неизмененный entrypoint менеджера запускает PHP-FPM
 # и оставляет nginx foreground-процессом контейнера.
+bash /usr/local/bin/gos-rsyslog.sh initialize disabled
+bash /usr/local/bin/gos-rsyslog.sh start optional
+
 echo "Starting SSHD..."
 /usr/sbin/sshd
 

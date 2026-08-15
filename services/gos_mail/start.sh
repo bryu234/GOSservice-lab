@@ -113,16 +113,10 @@ sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || tru
 # через gos_router и наблюдаются Suricata.
 ip route replace "$external_subnet" via "$router_internal_ip"
 
-# Rsyslog установлен, но остается выключенным, пока студент не создаст задание
-# /etc/rsyslog.d/30-postfix.conf. После этого он включается и на будущих стартах.
-if [[ -f /etc/rsyslog.d/30-postfix.conf ]]; then
-  rm -f /run/rsyslogd.pid
-  if rsyslogd -N1; then
-    rsyslogd
-  else
-    echo "Invalid /etc/rsyslog.d/30-postfix.conf; rsyslog was not started." >&2
-  fi
-fi
+# Общий аудит выключен по умолчанию. Rsyslog автоматически запускается после
+# включения общего блока или создания студентом Postfix-правила.
+bash /usr/local/bin/gos-rsyslog.sh initialize disabled
+bash /usr/local/bin/gos-rsyslog.sh start mail
 
 # Postfix и sshd запускаем как сервисы в фоне, Dovecot держит контейнер в foreground.
 postfix start
