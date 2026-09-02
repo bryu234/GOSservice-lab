@@ -146,13 +146,10 @@ ip route replace "$external_subnet" via "$router_internal_ip"
 wait_for_database
 install_espocrm_if_needed
 
-# SSHD запускаем здесь, а неизмененный entrypoint менеджера запускает PHP-FPM
-# и оставляет nginx foreground-процессом контейнера.
+# Entry point запускает nginx в daemon-режиме, необходимом для штатной замены
+# бинарника через USR2, а затем оставляет SSHD процессом PID 1 контейнера.
 bash /usr/local/bin/gos-rsyslog.sh initialize disabled
 bash /usr/local/bin/gos-rsyslog.sh start optional
-
-echo "Starting SSHD..."
-/usr/sbin/sshd
 
 echo "Starting nginx $(nginx -v 2>&1)..."
 exec /usr/local/bin/gos-website-entrypoint

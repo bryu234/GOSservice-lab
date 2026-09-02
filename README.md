@@ -141,6 +141,97 @@ Binary и конфигурация nginx хранятся в volume `website_ngi
 обновление и rewrite переживают restart/down/up. Полная очистка volumes
 возвращает nginx 1.30.0 и исходный конфиг без rewrite.
 
+### Обновление nginx без перезапуска контейнера
+
+Nginx работает в daemon-режиме, а PID 1 контейнера принадлежит SSHD. Поэтому
+студент может вручную заменить бинарник и переключить master-процессы без
+перезапуска `gos_web`. Например, для обновления до 1.30.2:
+
+```bash
+NEW_NGINX_VERSION=1.30.2
+cd "$HOME"
+curl -fLO "https://nginx.org/download/nginx-${NEW_NGINX_VERSION}.tar.gz"
+tar -xzf "nginx-${NEW_NGINX_VERSION}.tar.gz"
+cd "nginx-${NEW_NGINX_VERSION}"
+
+./configure \
+  --prefix=/opt/website-nginx \
+  --sbin-path=/opt/website-nginx/sbin/nginx \
+  --conf-path=/opt/website-nginx/conf/nginx.conf \
+  --pid-path=/run/nginx.pid \
+  --lock-path=/run/nginx.lock \
+  --error-log-path=/var/log/nginx/error.log \
+  --http-log-path=/var/log/nginx/access.log \
+  --with-http_ssl_module \
+  --with-http_v2_module \
+  --with-http_gzip_static_module \
+  --with-threads
+make -j"$(nproc)"
+
+./objs/nginx -V
+sudo ./objs/nginx -t
+
+OLD_NGINX_VERSION="$(nginx -v 2>&1 | cut -d/ -f2)"
+sudo cp -p \
+  /opt/website-nginx/sbin/nginx \
+  "/opt/website-nginx/sbin/nginx.${OLD_NGINX_VERSION}.bak"
+sudo install -o root -g root -m 0755 \
+  ./objs/nginx \
+  /opt/website-nginx/sbin/nginx.new
+sudo mv \
+  /opt/website-nginx/sbin/nginx.new \
+  /opt/website-nginx/sbin/nginx
+
+OLD_MASTER="$(cat /run/nginx.pid)"
+sudo kill -USR2 "$OLD_MASTER"
+
+for attempt in $(seq 1 20); do
+  if [ -s /run/nginx.pid ] \
+    && [ -s /run/nginx.pid.oldbin ] \
+    && [ "$(cat /run/nginx.pid)" != "$OLD_MASTER" ]; then
+    break
+  fi
+  sleep 1
+done
+
+NEW_MASTER="$(cat /run/nginx.pid)"
+test "$NEW_MASTER" != "$OLD_MASTER"
+test "$(cat /run/nginx.pid.oldbin)" = "$OLD_MASTER"
+ps -o pid,ppid,user,args -p "$OLD_MASTER,$NEW_MASTER"
+
+sudo kill -WINCH "$OLD_MASTER"
+curl -fsSI http://127.0.0.1/index.html
+nginx -v
+
+sudo kill -QUIT "$OLD_MASTER"
+
+for attempt in $(seq 1 20); do
+  ! kill -0 "$OLD_MASTER" 2>/dev/null && break
+  sleep 1
+done
+
+test ! -e /run/nginx.pid.oldbin
+ps -o pid,ppid,user,args -p "$NEW_MASTER"
+curl -fsSI http://127.0.0.1/index.html
+```
+
+Важно: `WINCH` и финальный `QUIT` отправляются старому master из
+`/run/nginx.pid.oldbin`, а не новому процессу из `/run/nginx.pid`.
+
+Если проверка после `WINCH` не прошла, до финального `QUIT` можно вернуть
+старые worker-процессы и бинарник:
+
+```bash
+sudo install -o root -g root -m 0755 \
+  "/opt/website-nginx/sbin/nginx.${OLD_NGINX_VERSION}.bak" \
+  /opt/website-nginx/sbin/nginx.rollback
+sudo mv \
+  /opt/website-nginx/sbin/nginx.rollback \
+  /opt/website-nginx/sbin/nginx
+sudo kill -HUP "$OLD_MASTER"
+sudo kill -QUIT "$NEW_MASTER"
+```
+
 ## Учебные правила iptables на роутере
 
 Пользователь `LOCALADMIN_USER` имеет sudo-доступ и может менять полный IPv4
