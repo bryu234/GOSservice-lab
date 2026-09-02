@@ -25,6 +25,10 @@ options {
   listen-on-v6 { none; };
   allow-query { any; };
   recursion yes;
+  // Оставляем сбор query-событий включенным заранее: BIND не меняет этот
+  // флаг при rndc reconfig. Пока logging-блок закомментирован, отдельный
+  // query.log не создается; после включения блока запросы сразу идут в него.
+  querylog yes;
   forwarders {
     1.1.1.1;
     8.8.8.8;
@@ -133,5 +137,7 @@ bash /usr/local/bin/gos-rsyslog.sh initialize disabled
 bash /usr/local/bin/gos-rsyslog.sh start optional
 
 # named запускается в foreground, чтобы контейнер жил пока жив DNS-сервер.
+# В отличие от -g, опция -f не перенаправляет принудительно все журналы в
+# stderr, поэтому включенные студентом file-каналы logging продолжают работать.
 /usr/sbin/sshd
-exec named -g -u bind
+exec named -f -u bind
