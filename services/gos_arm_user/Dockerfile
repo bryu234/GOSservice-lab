@@ -26,6 +26,7 @@ RUN apt-get update && \
       dbus-x11 \
       git \
       locales \
+      lsb-release \
       openssh-server \
       rsyslog \
       software-properties-common \

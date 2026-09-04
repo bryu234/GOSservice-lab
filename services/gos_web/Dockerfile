@@ -24,6 +24,7 @@ RUN apt-get update \
         libpcre3-dev \
         zlib1g-dev \
         libssl-dev \
+        lsb-release \
         unzip \
         mariadb-client \
         nano \

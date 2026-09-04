@@ -18,6 +18,7 @@ RUN apt-get update && \
       iproute2 \
       iputils-ping \
       locales \
+      lsb-release \
       nano \
       net-tools \
       netcat-openbsd \

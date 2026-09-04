@@ -10,6 +10,7 @@ RUN apt-get update && \
       ca-certificates \
       iproute2 \
       iptables \
+      lsb-release \
       nano \
       netcat-openbsd \
       openssh-server \

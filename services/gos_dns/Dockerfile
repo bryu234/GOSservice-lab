@@ -12,6 +12,7 @@ RUN apt-get update && \
       bind9utils \
       dnsutils \
       iputils-ping \
+      lsb-release \
       nano \
       openssh-server \
       sudo \

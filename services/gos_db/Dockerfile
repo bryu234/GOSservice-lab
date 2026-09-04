@@ -7,6 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # openssh-server/sudo/nano нужны только для лабораторного администрирования.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+      lsb-release \
       nano \
       openssh-server \
       rsyslog \

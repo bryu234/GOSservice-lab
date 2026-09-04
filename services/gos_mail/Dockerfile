@@ -19,6 +19,7 @@ RUN set -eux; \
       dovecot-imapd \
       dovecot-lmtpd \
       iproute2 \
+      lsb-release \
       netcat-openbsd \
       nano \
       openssh-server \
