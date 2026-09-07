@@ -255,9 +255,9 @@ echo "Router ready: $external_subnet ($external_interface) -> $internal_subnet (
 echo "Starting passive Suricata IDS on $external_interface."
 
 # -S загружает только контролируемое локальное правило. HOME_NET и зависящий от
-# него EXTERNAL_NET переопределяются из .env, поэтому конфигурация остается
-# переносимой между стендами. EXTERNAL_NET задается явно: Suricata иначе может
-# вычислить !$HOME_NET до применения переопределения HOME_NET.
+# него EXTERNAL_NET переопределяются сетями из .env, поэтому конфигурация
+# остается переносимой между стендами. EXTERNAL_NET задается внешней сетью
+# стенда явно: Suricata иначе вычисляет !$HOME_NET до переопределения HOME_NET.
 # Docker veth передает часть пакетов до вычисления аппаратно выгружаемых checksum;
 # -k none не дает Suricata отбрасывать такие пакеты до HTTP-инспекции.
 suricata \
@@ -266,7 +266,7 @@ suricata \
   -k none \
   -S /etc/suricata/rules/gos-local.rules \
   --set "vars.address-groups.HOME_NET=$internal_subnet" \
-  --set "vars.address-groups.EXTERNAL_NET=!$internal_subnet" \
+  --set "vars.address-groups.EXTERNAL_NET=$external_subnet" \
   --pidfile "$suricata_pidfile" &
 suricata_pid=$!
 
