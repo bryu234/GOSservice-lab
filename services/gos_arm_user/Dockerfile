@@ -23,6 +23,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ca-certificates \
+      curl \
       dbus-x11 \
       git \
       locales \
@@ -32,6 +33,7 @@ RUN apt-get update && \
       software-properties-common \
       sudo \
       vim \
+      wget \
       x11-xserver-utils \
       xfce4 \
       xfce4-goodies \

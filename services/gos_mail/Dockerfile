@@ -15,6 +15,7 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       ca-certificates \
+      curl \
       dovecot-core \
       dovecot-imapd \
       dovecot-lmtpd \
@@ -26,7 +27,8 @@ RUN set -eux; \
       postfix \
       procps \
       rsyslog \
-      sudo; \
+      sudo \
+      wget; \
     rm -rf /var/lib/apt/lists/*
 
 # Скрипт создает начальные конфиги один раз и затем сохраняет изменения студента.

@@ -44,6 +44,7 @@ RUN apt-get update \
         php8.3-bcmath \
         rsyslog \
         sudo \
+        wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Сборка nginx нужной версии из официального tar.gz.

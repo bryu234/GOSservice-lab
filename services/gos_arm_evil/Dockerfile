@@ -30,6 +30,7 @@ RUN apt-get update && \
       sudo \
       tshark \
       vim \
+      wget \
       wireshark \
       x11-xserver-utils \
       xfce4 \

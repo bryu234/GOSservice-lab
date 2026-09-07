@@ -10,13 +10,15 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       bind9 \
       bind9utils \
+      curl \
       dnsutils \
       iputils-ping \
       lsb-release \
       nano \
       openssh-server \
       sudo \
-      rsyslog && \
+      rsyslog \
+      wget && \
     rm -rf /var/lib/apt/lists/*
 
 # Каталог уже существует, поэтому студенту достаточно включить logging-блок Bind.

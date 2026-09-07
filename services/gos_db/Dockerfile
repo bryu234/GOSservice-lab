@@ -7,11 +7,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 # openssh-server/sudo/nano нужны только для лабораторного администрирования.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+      curl \
       lsb-release \
       nano \
       openssh-server \
       rsyslog \
       sudo \
+      wget \
     && rm -rf /var/lib/apt/lists/*
 
 # start.sh готовит SSH-админа и затем передает запуск штатному entrypoint MariaDB.
