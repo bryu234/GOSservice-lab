@@ -256,9 +256,12 @@ echo "Starting passive Suricata IDS on $external_interface."
 
 # -S загружает только контролируемое локальное правило. HOME_NET переопределяется
 # из .env, поэтому конфигурация остается переносимой между стендами.
+# Docker veth передает часть пакетов до вычисления аппаратно выгружаемых checksum;
+# -k none не дает Suricata отбрасывать такие пакеты до HTTP-инспекции.
 suricata \
   -c /etc/suricata/suricata.yaml \
   -i "$external_interface" \
+  -k none \
   -S /etc/suricata/rules/gos-local.rules \
   --set "vars.address-groups.HOME_NET=$internal_subnet" \
   --pidfile "$suricata_pidfile" &
