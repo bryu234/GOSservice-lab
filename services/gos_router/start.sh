@@ -254,19 +254,25 @@ rm -f "$suricata_pidfile"
 echo "Router ready: $external_subnet ($external_interface) -> $internal_subnet ($internal_interface)."
 echo "Starting passive Suricata IDS on $external_interface."
 
-# -S загружает только контролируемое локальное правило. HOME_NET и зависящий от
-# него EXTERNAL_NET переопределяются сетями из .env, поэтому конфигурация
-# остается переносимой между стендами. EXTERNAL_NET задается внешней сетью
-# стенда явно: Suricata иначе вычисляет !$HOME_NET до переопределения HOME_NET.
+# HOME_NET и EXTERNAL_NET записываются в рабочий YAML до запуска. Это важно для
+# USR2: при горячей перезагрузке Suricata заново компилирует правила из YAML и
+# не должна возвращаться к стандартным диапазонам дистрибутива.
+suricata_config="/etc/suricata/suricata.yaml"
+sed -i -E \
+  -e "s|^([[:space:]]*)HOME_NET:.*|\\1HOME_NET: \"[$internal_subnet]\"|" \
+  -e "s|^([[:space:]]*)EXTERNAL_NET:.*|\\1EXTERNAL_NET: \"[$external_subnet]\"|" \
+  "$suricata_config"
+grep -Fq "HOME_NET: \"[$internal_subnet]\"" "$suricata_config"
+grep -Fq "EXTERNAL_NET: \"[$external_subnet]\"" "$suricata_config"
+
+# -S загружает только контролируемый локальный файл правил.
 # Docker veth передает часть пакетов до вычисления аппаратно выгружаемых checksum;
 # -k none не дает Suricata отбрасывать такие пакеты до HTTP-инспекции.
 suricata \
-  -c /etc/suricata/suricata.yaml \
+  -c "$suricata_config" \
   -i "$external_interface" \
   -k none \
   -S /etc/suricata/rules/gos-local.rules \
-  --set "vars.address-groups.HOME_NET=$internal_subnet" \
-  --set "vars.address-groups.EXTERNAL_NET=$external_subnet" \
   --pidfile "$suricata_pidfile" &
 suricata_pid=$!
 
