@@ -25,8 +25,8 @@ services:
 
   gos_web:
     ports:
-      # HTTP к EspoCRM: внешний порт задается ESPOCRM_HTTP_HOST_PORT в .env.
-      - "127.0.0.1:${ESPOCRM_HTTP_HOST_PORT}:80/tcp"
+      # HTTP к учебному сайту: внешний порт задается WEBSITE_HTTP_HOST_PORT в .env.
+      - "127.0.0.1:${WEBSITE_HTTP_HOST_PORT}:80/tcp"
 
   gos_siem_dashboard:
     ports:

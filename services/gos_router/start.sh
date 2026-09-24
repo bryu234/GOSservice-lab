@@ -8,6 +8,7 @@ external_subnet="${GOS_EXTERNAL_SUBNET:?GOS_EXTERNAL_SUBNET is required}"
 router_internal_ip="${GOS_ROUTER_INTERNAL_IP:?GOS_ROUTER_INTERNAL_IP is required}"
 router_external_ip="${GOS_ROUTER_EXTERNAL_IP:?GOS_ROUTER_EXTERNAL_IP is required}"
 evil_ip="${GOS_ARM_EVIL_IP:?GOS_ARM_EVIL_IP is required}"
+dns_ip="${GOS_DNS_IP:?GOS_DNS_IP is required}"
 web_ip="${GOS_WEB_INTERNAL_IP:?GOS_WEB_INTERNAL_IP is required}"
 mail_ip="${GOS_MAIL_IP:?GOS_MAIL_IP is required}"
 firewall_state_dir="/var/lib/gos-router-firewall"
@@ -39,7 +40,7 @@ if [ -z "$internal_interface" ] || [ -z "$external_interface" ]; then
 fi
 
 apply_default_firewall() {
-  # Межсетевой экран по умолчанию пропускает только CRM и почтовые протоколы
+  # Межсетевой экран по умолчанию пропускает DNS, учебный сайт и почтовые протоколы
   # от evil-машины. SSH завершается на самом роутере и не попадает в FORWARD.
   iptables-restore <<EOF
 *filter
@@ -47,6 +48,8 @@ apply_default_firewall() {
 :FORWARD DROP [0:0]
 :OUTPUT ACCEPT [0:0]
 -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+-A FORWARD -i $external_interface -o $internal_interface -s $evil_ip/32 -d $dns_ip/32 -p tcp --dport 53 -m conntrack --ctstate NEW -j ACCEPT
+-A FORWARD -i $external_interface -o $internal_interface -s $evil_ip/32 -d $dns_ip/32 -p udp --dport 53 -m conntrack --ctstate NEW -j ACCEPT
 -A FORWARD -i $external_interface -o $internal_interface -s $evil_ip/32 -d $web_ip/32 -p tcp --dport 80 -m conntrack --ctstate NEW -j ACCEPT
 -A FORWARD -i $external_interface -o $internal_interface -s $evil_ip/32 -d $mail_ip/32 -p tcp -m multiport --dports 25,143,587 -m conntrack --ctstate NEW -j ACCEPT
 COMMIT
@@ -223,6 +226,10 @@ sed -i '/^AllowUsers /d' /etc/ssh/sshd_config || true
 sed -i '/^ListenAddress /d' /etc/ssh/sshd_config || true
 echo "AllowUsers $admin_user" >>/etc/ssh/sshd_config
 echo "ListenAddress $router_internal_ip" >>/etc/ssh/sshd_config
+
+# На роутере конфигурация подготовлена, но студент включает ее самостоятельно.
+bash /usr/local/bin/gos-rsyslog.sh initialize disabled
+bash /usr/local/bin/gos-rsyslog.sh start optional
 /usr/sbin/sshd
 
 # Маршрутизация включается compose-параметром sysctls. Повторная запись в
@@ -247,13 +254,25 @@ rm -f "$suricata_pidfile"
 echo "Router ready: $external_subnet ($external_interface) -> $internal_subnet ($internal_interface)."
 echo "Starting passive Suricata IDS on $external_interface."
 
-# -S загружает только контролируемое локальное правило. HOME_NET переопределяется
-# из .env, поэтому конфигурация остается переносимой между стендами.
+# HOME_NET и EXTERNAL_NET записываются в рабочий YAML до запуска. Это важно для
+# USR2: при горячей перезагрузке Suricata заново компилирует правила из YAML и
+# не должна возвращаться к стандартным диапазонам дистрибутива.
+suricata_config="/etc/suricata/suricata.yaml"
+sed -i -E \
+  -e "s|^([[:space:]]*)HOME_NET:.*|\\1HOME_NET: \"[$internal_subnet]\"|" \
+  -e "s|^([[:space:]]*)EXTERNAL_NET:.*|\\1EXTERNAL_NET: \"[$external_subnet]\"|" \
+  "$suricata_config"
+grep -Fq "HOME_NET: \"[$internal_subnet]\"" "$suricata_config"
+grep -Fq "EXTERNAL_NET: \"[$external_subnet]\"" "$suricata_config"
+
+# -S загружает только контролируемый локальный файл правил.
+# Docker veth передает часть пакетов до вычисления аппаратно выгружаемых checksum;
+# -k none не дает Suricata отбрасывать такие пакеты до HTTP-инспекции.
 suricata \
-  -c /etc/suricata/suricata.yaml \
+  -c "$suricata_config" \
   -i "$external_interface" \
+  -k none \
   -S /etc/suricata/rules/gos-local.rules \
-  --set "vars.address-groups.HOME_NET=$internal_subnet" \
   --pidfile "$suricata_pidfile" &
 suricata_pid=$!
 

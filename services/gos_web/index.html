@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>ГосСервис</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Segoe UI, Arial, sans-serif;
+}
+
+body{
+    background:#eef3f8;
+}
+
+header{
+    background:#1f4e79;
+    color:white;
+    padding:18px 40px;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+}
+
+header h1{
+    font-size:24px;
+    font-weight:600;
+}
+
+header p{
+    opacity:.9;
+    margin-top:5px;
+}
+
+.container{
+    height:calc(100vh - 90px);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.login{
+    width:420px;
+    background:#fff;
+    border-radius:10px;
+    box-shadow:0 12px 30px rgba(0,0,0,.15);
+    overflow:hidden;
+}
+
+.login-title{
+    background:#2f6fb3;
+    color:white;
+    padding:20px;
+    text-align:center;
+}
+
+.login-title h2{
+    font-size:24px;
+}
+
+.login-title span{
+    display:block;
+    margin-top:8px;
+    font-size:14px;
+    opacity:.9;
+}
+
+.form{
+    padding:35px;
+}
+
+label{
+    display:block;
+    margin-bottom:8px;
+    color:#444;
+    font-weight:600;
+}
+
+input{
+    width:100%;
+    padding:12px;
+    margin-bottom:20px;
+    border:1px solid #cfd6dd;
+    border-radius:6px;
+    font-size:15px;
+}
+
+input:focus{
+    outline:none;
+    border-color:#2f6fb3;
+}
+
+button{
+    width:100%;
+    padding:14px;
+    background:#1f75cb;
+    color:white;
+    border:none;
+    border-radius:6px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#155da8;
+}
+
+.notice{
+    margin-top:20px;
+    padding:12px;
+    background:#f6f8fa;
+    border-left:4px solid #2f6fb3;
+    font-size:13px;
+    color:#555;
+}
+
+footer{
+    text-align:center;
+    margin-top:25px;
+    font-size:12px;
+    color:#888;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>ГосСервис</h1>
+    <p>Защищенный доступ к внутренним сервисам</p>
+</header>
+
+<div class="container">
+
+<div class="login">
+
+<div class="login-title">
+    <h2>Вход для оператора</h2>
+    <span>Авторизация в защищенном сегменте системы</span>
+</div>
+
+<form class="form" action="users.php" method="get">
+
+<label>Имя пользователя</label>
+<input
+type="text"
+name="login"
+placeholder="Введите логин">
+
+<label>Пароль</label>
+<input
+type="password"
+name="password"
+placeholder="Введите пароль">
+
+<button type="submit">
+Войти
+</button>
+
+<div class="notice">
+Доступ предоставляется только авторизованным сотрудникам.
+Все действия пользователей подлежат регистрации и аудиту.
+</div>
+
+<footer>
+© 2026 ГосСервис
+</footer>
+
+</form>
+
+</div>
+
+</div>
+<script>
+document.querySelector("form").addEventListener("submit", function(e){
+
+    const login = document.querySelector('input[name="login"]').value;
+    const password = document.querySelector('input[name="password"]').value;
+
+    if(login === "admin" && password === "xxXX1234!"){
+        return true;
+    }
+
+    e.preventDefault();
+    alert("Неверный логин или пароль");
+});
+</script>
+</body>
+</html>

@@ -10,15 +10,21 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       bind9 \
       bind9utils \
+      curl \
       dnsutils \
       iputils-ping \
+      lsb-release \
       nano \
       openssh-server \
       sudo \
-      rsyslog && \
+      rsyslog \
+      wget && \
     rm -rf /var/lib/apt/lists/*
 
-# Скрипт на старте генерирует named.conf и зону gos.local из переменных .env.
+# Каталог уже существует, поэтому студенту достаточно включить logging-блок Bind.
+RUN install -d -m 0750 -o bind -g bind /var/log/bind
+
+# Скрипт при первом старте генерирует named.conf и зону gos.local из переменных .env.
 COPY start.sh /usr/local/bin/gos-dns-start
 RUN chmod +x /usr/local/bin/gos-dns-start
 

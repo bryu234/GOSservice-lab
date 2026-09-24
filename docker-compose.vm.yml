@@ -25,8 +25,8 @@ services:
 
   gos_web:
     ports:
-      # HTTP к EspoCRM снаружи VM.
-      - "0.0.0.0:${ESPOCRM_HTTP_HOST_PORT}:80/tcp"
+      # HTTP к учебному сайту снаружи VM.
+      - "0.0.0.0:${WEBSITE_HTTP_HOST_PORT}:80/tcp"
 
   gos_siem_dashboard:
     ports:

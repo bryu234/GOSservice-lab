@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ESPO_DIR=/var/www/espocrm
-PHP_FPM_BIN=/usr/sbin/php-fpm8.3
 admin_user="${LOCALADMIN_USER:-localadmin}"
 admin_password="${LOCALADMIN_PASSWORD:-CHANGE_ME_LOCALADMIN_PASSWORD}"
 external_subnet="${GOS_EXTERNAL_SUBNET:-172.28.8.0/24}"
@@ -147,12 +146,10 @@ ip route replace "$external_subnet" via "$router_internal_ip"
 wait_for_database
 install_espocrm_if_needed
 
-# SSHD и PHP-FPM запускаем как daemon, nginx оставляем foreground-процессом контейнера.
-echo "Starting SSHD..."
-/usr/sbin/sshd
-
-echo "Starting PHP-FPM..."
-"$PHP_FPM_BIN" -D
+# Entry point запускает nginx в daemon-режиме, необходимом для штатной замены
+# бинарника через USR2, а затем оставляет SSHD процессом PID 1 контейнера.
+bash /usr/local/bin/gos-rsyslog.sh initialize disabled
+bash /usr/local/bin/gos-rsyslog.sh start optional
 
 echo "Starting nginx $(nginx -v 2>&1)..."
-exec nginx -g "daemon off;"
+exec /usr/local/bin/gos-website-entrypoint

@@ -31,6 +31,7 @@ RUN apt-get update && \
       iproute2 \
       iputils-ping \
       locales \
+      lsb-release \
       nano \
       net-tools \
       nmap \
@@ -41,6 +42,7 @@ RUN apt-get update && \
       sudo \
       tshark \
       vim \
+      wget \
       wireshark \
       x11-xserver-utils \
       xfce4 \

@@ -26,6 +26,10 @@ chmod 755 /run/sshd
 ssh-keygen -A >/dev/null 2>&1 || true
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config || true
+
+# На DB правила локального аудита подготовлены, но изначально выключены.
+bash /usr/local/bin/gos-rsyslog.sh initialize disabled
+bash /usr/local/bin/gos-rsyslog.sh start optional
 /usr/sbin/sshd
 
 # Официальный entrypoint MariaDB выполняет инициализацию datadir и запуск mariadbd.
