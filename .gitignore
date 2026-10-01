@@ -6,6 +6,7 @@
 # Локальная документация, не публикуется в публичный репозиторий.
 SERVICES.local.md
 RUN_AND_ACCESS.local.md
+INFRA_REVIEW.md
 
 # IDE/editor state.
 .idea/
